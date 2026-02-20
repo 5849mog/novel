@@ -393,6 +393,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   <div style="height:12px"></div>
   <button class="btn-sm" onclick="exportTxt()" style="width:100%;justify-content:center;padding:13px;font-size:13px;">📄 导出全文 (.txt 文件)</button>
   <div style="height:8px"></div>
+  <button class="btn-sm" onclick="exportMd()" style="width:100%;justify-content:center;padding:13px;font-size:13px;">🧾 导出全文 (.md 文件)</button>
+  <div style="height:8px"></div>
   <button class="btn-sm danger" onclick="clearProject()" style="width:100%;justify-content:center;padding:13px;font-size:13px;">🗑️ 清除项目数据</button>
 </div>
 
@@ -1036,9 +1038,33 @@ function renderStats(){
 function goWriteCh(id){ const i=proj.chapters.findIndex(c=>c.id===id); if(i>=0){ currentChIdx=i; nav('write'); } }
 
 // ─── EXPORT TXT ───
-function exportTxt(){
+function buildExportText(format='txt'){
   const has=proj.chapters.filter(c=>c.content);
-  if(!has.length){ toast('⚠️ 没有可导出的内容'); return; }
+  if(!has.length) return '';
+
+  if(format==='md'){
+    const lines=[];
+    lines.push(`# 《${proj.title||'未命名小说'}》`);
+    lines.push('');
+    lines.push(`- 类型：${proj.genre}`);
+    lines.push(`- 风格：${proj.style}`);
+    lines.push(`- 情感强度：第${proj.intensity}档 · ${INT_LABELS[proj.intensity-1]}`);
+    lines.push(`- 主角：${proj.charMain||'未设定'}`);
+    lines.push(`- 配角：${proj.charSub||'未设定'}`);
+    lines.push(`- 章节数：${has.length}`);
+    lines.push(`- 总字数：${has.reduce((s,c)=>s+c.content.length,0)}`);
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+    has.forEach(ch=>{
+      lines.push(`## ${ch.title}`);
+      lines.push('');
+      lines.push(ch.content);
+      lines.push('');
+    });
+    return lines.join('\n');
+  }
+
   const lines=[];
   lines.push(`《${proj.title}》`);
   lines.push('');
@@ -1047,8 +1073,11 @@ function exportTxt(){
   has.length&&lines.push(`共${has.length}章 · ${has.reduce((s,c)=>s+c.content.length,0)}字`);
   lines.push(''); lines.push('═'.repeat(40)); lines.push('');
   has.forEach(ch=>{ lines.push(ch.title); lines.push('─'.repeat(20)); lines.push(ch.content); lines.push(''); lines.push(''); });
-  const full=lines.join('\n');
-  const fn=(proj.title||'小说')+'.txt';
+  return lines.join('\n');
+}
+
+function exportTextFile(full, fn){
+  if(!full){ toast('⚠️ 没有可导出的内容'); return; }
 
   // 只走下载，失败只提示 toast，不触发 prompt 弹窗
   let downloaded=false;
@@ -1083,6 +1112,18 @@ function exportTxt(){
       } catch(e){ toast('⚠️ 导出失败，请在浏览器中打开本工具'); }
     }
   }
+}
+
+function exportTxt(){
+  const full=buildExportText('txt');
+  const fn=(proj.title||'小说')+'.txt';
+  exportTextFile(full, fn);
+}
+
+function exportMd(){
+  const full=buildExportText('md');
+  const fn=(proj.title||'小说')+'.md';
+  exportTextFile(full, fn);
 }
 
 function clearProject(){
