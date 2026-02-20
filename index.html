@@ -1303,19 +1303,25 @@ function toggleStream(){
 function saveCfg(){
   const p=document.getElementById('cfgProvider').value;
   const key=document.getElementById('cfgKey').value.trim();
-  if(!key){ toast('⚠️ 请输入 API Key'); return; }
   // 自定义 provider 从文本框读模型名，其他从下拉读
   const model = p==='custom'
     ? document.getElementById('cfgModelInput').value.trim()
     : document.getElementById('cfgModel').value;
   if(!model){ toast('⚠️ 请输入模型名称'); return; }
+  const maxTokens=parseInt(document.getElementById('cfgMaxTk').value,10);
+  const temperature=parseFloat(document.getElementById('cfgTemp').value);
+
+  if(!Number.isFinite(maxTokens)||maxTokens<=0){ toast('⚠️ Max Tokens 无效'); return; }
+  if(!Number.isFinite(temperature)||temperature<0||temperature>2){ toast('⚠️ Temperature 无效'); return; }
+
   cfg.provider=p;
   cfg.model=model;
-  cfg.apiKeys[p]=key;
-  cfg.maxTokens=parseInt(document.getElementById('cfgMaxTk').value);
-  cfg.temperature=parseFloat(document.getElementById('cfgTemp').value);
+  if(key) cfg.apiKeys[p]=key;
+  cfg.maxTokens=maxTokens;
+  cfg.temperature=temperature;
   cfg.customEndpoint=document.getElementById('cfgEndpoint').value.trim();
-  save(); updateProviderBadge(); updateKeyStatus(); toast('✅ 配置已保存');
+  save(); updateProviderBadge(); updateKeyStatus();
+  toast(key?'✅ 配置已保存':'✅ 参数已保存（API Key 未修改）');
 }
 
 function updateProviderBadge(){ document.getElementById('provName').textContent=MC[cfg.provider]?.name||cfg.provider; }
