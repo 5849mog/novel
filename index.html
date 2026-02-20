@@ -343,11 +343,13 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="frow">
       <label class="flabel">额外创作要求（可选）</label>
       <input class="finput" id="chExtra" placeholder="例如：结尾留悬念，多写内心独白…">
+      <div class="fhint" id="writeDraftStatus">草稿会自动保存到本地</div>
     </div>
     <button class="btn-primary" id="genBtn" onclick="generateChapter()">
       <div class="spinner" id="genSpinner"></div>
       <span id="genLabel">✦ 生 成 本 章</span>
     </button>
+    <div class="fhint" style="margin-top:8px">快捷键：Ctrl/⌘ + Enter 生成 · Ctrl/⌘ + S 存档</div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 8px;">
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:11px;color:var(--t3)">正文</span>
@@ -617,6 +619,8 @@ let proj = { title:'', genre:'romance', style:'literary', intensity:3, qujia:fal
 let currentChIdx = -1;
 let isGenerating = false;
 let isRevising   = false;
+let draftSaveTimer = null;
+let draftStatusTimer = null;
 
 // ─── 强度档位说明（必须在 boot() 之前定义）───
 const INT_SHORT_DESC = [
@@ -634,6 +638,7 @@ const INT_SHORT_DESC = [
   updateProviderBadge();
   syncSetupForm();
   loadCfgForm();
+  initWriteInteractions();
 })();
 
 function save(){
@@ -654,6 +659,71 @@ function nav(p){
   if(p==='write')    renderWrite();
   if(p==='stats')    renderStats();
   if(p==='settings') loadCfgForm();
+}
+
+function initWriteInteractions(){
+  const outline=document.getElementById('chOutlineInput');
+  const extra=document.getElementById('chExtra');
+  const revInput=document.getElementById('revInput');
+
+  const onMetaInput=()=>{
+    if(currentChIdx<0||!proj.chapters[currentChIdx]) return;
+    const ch=proj.chapters[currentChIdx];
+    ch.outline=(outline?.value||'').trim();
+    ch.extra=(extra?.value||'').trim();
+    queueDraftSave();
+  };
+
+  if(outline) outline.addEventListener('input',onMetaInput);
+  if(extra) extra.addEventListener('input',onMetaInput);
+
+  if(revInput){
+    revInput.addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'&&!e.shiftKey){
+        e.preventDefault();
+        doRevision();
+      }
+    });
+  }
+
+  document.addEventListener('keydown',(e)=>{
+    if(!document.getElementById('page-write')?.classList.contains('active')) return;
+    const mod=e.ctrlKey||e.metaKey;
+    if(!mod) return;
+
+    if(e.key==='Enter'){
+      e.preventDefault();
+      if(document.activeElement===revInput) doRevision();
+      else generateChapter();
+    }
+
+    if(e.key.toLowerCase()==='s'){
+      e.preventDefault();
+      if(currentChIdx>=0&&proj.chapters[currentChIdx]?.content){
+        saveChapter();
+      } else {
+        toast('⚠️ 当前章节还没有可存档内容');
+      }
+    }
+  });
+}
+
+function setDraftStatus(text,color='var(--t3)'){
+  const el=document.getElementById('writeDraftStatus');
+  if(!el) return;
+  el.textContent=text;
+  el.style.color=color;
+}
+
+function queueDraftSave(){
+  setDraftStatus('正在自动保存…','var(--gold)');
+  clearTimeout(draftSaveTimer);
+  clearTimeout(draftStatusTimer);
+  draftSaveTimer=setTimeout(()=>{
+    save();
+    setDraftStatus('✓ 已自动保存','#3d9970');
+    draftStatusTimer=setTimeout(()=>setDraftStatus('草稿会自动保存到本地'),1200);
+  },350);
 }
 
 // ─── SETUP ───
@@ -847,6 +917,7 @@ function renderWrite(){
   const has=!!ch.content;
   document.getElementById('copyChBtn').style.display = has?'inline-flex':'none';
   document.getElementById('saveChBtn').style.display = (has&&ch.status!=='done')?'inline-flex':'none';
+  setDraftStatus('草稿会自动保存到本地');
 }
 
 function updateOutWC(){
@@ -861,8 +932,10 @@ function updateOutWC(){
 
 function onOutputEdit(){
   updateOutWC();
-  if(currentChIdx>=0&&proj.chapters[currentChIdx])
+  if(currentChIdx>=0&&proj.chapters[currentChIdx]){
     proj.chapters[currentChIdx].content=document.getElementById('writeOutput').value;
+    queueDraftSave();
+  }
 }
 
 function updateRevPanel(){
