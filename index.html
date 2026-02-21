@@ -534,7 +534,6 @@ const CFG_KEY  = 'mq2_cfg';
 const PROJ_KEY = 'mq2_proj';
 const API_KEYS_LOCAL_KEY = 'mq2_api_keys_local';
 const API_KEYS_SESSION_KEY = 'mq2_api_keys_session';
-const SCHEMA_VERSION = 2;
 const MAX_REV  = 4;
 
 const MC = {
@@ -657,7 +656,7 @@ const STYLE_DESC = {
 
 // ─── STATE ───
 let cfg = { provider:'deepseek', model:'deepseek-chat', apiKeys:{deepseek:'',openai:'',claude:'',custom:''}, customEndpoint:'', maxTokens:4096, temperature:1.0, streaming:true, rememberKeys:false };
-let proj = { title:'', genre:'romance', style:'literary', intensity:3, qujia:false, charMain:'', charSub:'', worldBg:'', plotCore:'', chTotal:10, chWords:1500, chapters:[], metrics:{genOk:0,genFail:0,revOk:0,revFail:0,warnCount:0} };
+let proj = { title:'', genre:'romance', style:'literary', intensity:3, qujia:false, charMain:'', charSub:'', worldBg:'', plotCore:'', chTotal:10, chWords:1500, chapters:[] };
 let currentChIdx = -1;
 let isGenerating = false;
 let isRevising   = false;
@@ -676,9 +675,9 @@ const INT_SHORT_DESC = [
 // ─── BOOT ───
 (function boot(){
   try{
-    const raw=localStorage.getItem(CFG_KEY);
-    const parsed=unwrapVersioned(raw);
-    if(parsed){
+    const s=localStorage.getItem(CFG_KEY);
+    if(s){
+      const parsed=JSON.parse(s);
       // 兼容旧版本：此前 cfg 含有 apiKeys 并保存在 localStorage
       if(parsed.apiKeys&&typeof parsed.apiKeys==='object'){
         Object.assign(cfg.apiKeys,parsed.apiKeys);
@@ -688,11 +687,7 @@ const INT_SHORT_DESC = [
     }
   }catch(e){}
   try{ Object.assign(cfg.apiKeys,loadApiKeys()); }catch(e){}
-  try{
-    const raw=localStorage.getItem(PROJ_KEY);
-    const parsed=unwrapVersioned(raw);
-    if(parsed) Object.assign(proj,normalizeProject(parsed));
-  }catch(e){}
+  try{ const s=localStorage.getItem(PROJ_KEY); if(s) Object.assign(proj, JSON.parse(s)); }catch(e){}
   updateAppHeight();
   window.addEventListener('resize',updateAppHeight);
   window.addEventListener('orientationchange',updateAppHeight);
@@ -720,41 +715,12 @@ function bindNativeTouchFeedback(){
 
 function save(){
   try{
-    proj=normalizeProject(proj);
     const cfgSnapshot={...cfg};
     delete cfgSnapshot.apiKeys;
-    localStorage.setItem(CFG_KEY,JSON.stringify(wrapVersioned(cfgSnapshot)));
-    localStorage.setItem(PROJ_KEY,JSON.stringify(wrapVersioned(proj)));
+    localStorage.setItem(CFG_KEY,JSON.stringify(cfgSnapshot));
+    localStorage.setItem(PROJ_KEY, JSON.stringify(proj));
     persistApiKeys();
   } catch(e){ toast('⚠️ 存储失败（可能是无痕模式限制）'); }
-}
-
-function wrapVersioned(data){
-  return {schemaVersion:SCHEMA_VERSION,data};
-}
-
-function unwrapVersioned(raw){
-  if(!raw) return null;
-  const parsed=JSON.parse(raw);
-  if(parsed&&typeof parsed==='object'&&'data' in parsed&&'schemaVersion' in parsed) return parsed.data||null;
-  return parsed;
-}
-
-function normalizeProject(p){
-  const next={...proj,...(p||{})};
-  next.metrics={genOk:0,genFail:0,revOk:0,revFail:0,warnCount:0,...(p?.metrics||{})};
-  next.chapters=(Array.isArray(next.chapters)?next.chapters:[]).map((c,i)=>({
-    ...newCh(i+1),
-    ...c,
-    ctxSummary:c?.ctxSummary||'',
-    ctxSummaryPrev:c?.ctxSummaryPrev||''
-  }));
-  return next;
-}
-
-function ensureMetrics(){
-  if(!proj.metrics||typeof proj.metrics!=='object') proj.metrics={genOk:0,genFail:0,revOk:0,revFail:0,warnCount:0};
-  return proj.metrics;
 }
 
 function loadApiKeys(){
@@ -919,13 +885,12 @@ function loadDemo(){
     worldBg:'现代都市，上海，商业与时尚圈',
     plotCore:'林晚晚因家族欠债被迫嫁给沈慕白，从冷战对峙到逐渐心动，中间横亘着商业阴谋与旧情人的阻挠，最终两人在风雨中走向真爱',
     chTotal:10, chWords:1500,
-    chapters:Array.from({length:10},(_,i)=>newCh(i+1)),
-    metrics:{genOk:0,genFail:0,revOk:0,revFail:0,warnCount:0}
+    chapters:Array.from({length:10},(_,i)=>newCh(i+1))
   };
   save(); syncSetupForm(); toast('📖 演示项目已加载！'); nav('chapters');
 }
 
-function newCh(num){ return {id:Date.now()+num+Math.floor(Math.random()*9999),num,title:`第${num}章`,outline:'',content:'',ctxSummary:'',ctxSummaryPrev:'',revisions:[],revCount:0,status:'todo'}; }
+function newCh(num){ return {id:Date.now()+num+Math.floor(Math.random()*9999),num,title:`第${num}章`,outline:'',content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'}; }
 
 // ─── CHAPTERS ───
 function renderChapters(){
@@ -989,7 +954,7 @@ function copyChById(id,e){
 function resetCh(i,e){
   e.stopPropagation();
   if(!confirm('确认重置本章？内容和修改记录将被清空。')) return;
-  Object.assign(proj.chapters[i],{content:'',ctxSummary:'',ctxSummaryPrev:'',revisions:[],revCount:0,status:'todo'});
+  Object.assign(proj.chapters[i],{content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'});
   save(); renderChapters(); toast('↩ 已重置');
 }
 
@@ -1144,10 +1109,6 @@ async function generateChapter(){
     if(!result) throw new Error('AI返回了空内容，请重试');
     ch.content=result; ch.status='writing';
     refreshChapterSummary(ch);
-    const warns=assessDraftQuality(ch,result);
-    const mt=ensureMetrics();
-    if(warns.length){ mt.warnCount=(mt.warnCount||0)+warns.length; toast('⚠️ 质检提醒：'+warns[0]); }
-    mt.genOk=(mt.genOk||0)+1;
     save(); updateRevPanel();
     document.getElementById('copyChBtn').style.display='inline-flex';
     document.getElementById('saveChBtn').style.display='inline-flex';
@@ -1158,8 +1119,6 @@ async function generateChapter(){
     document.getElementById('writeOutput').value = prevContent||'';
     updateOutWC();
     if(prevContent){ updateRevPanel(); }
-    const mt=ensureMetrics();
-    mt.genFail=(mt.genFail||0)+1;
     toast('❌ '+(err.message||'生成失败，请检查API配置'));
   } finally {
     setGenLoad(false);
@@ -1194,18 +1153,12 @@ async function doRevision(){
     ch.revisions.push({round:ch.revCount+1,inst,before:prev,after:result});
     ch.content=result; ch.revCount++;
     refreshChapterSummary(ch);
-    const warns=assessDraftQuality(ch,result);
-    const mt=ensureMetrics();
-    if(warns.length){ mt.warnCount=(mt.warnCount||0)+warns.length; toast('⚠️ 修改后提醒：'+warns[0]); }
-    mt.revOk=(mt.revOk||0)+1;
     save(); document.getElementById('revInput').value='';
     updateRevPanel();
     toast(`✏️ 修改完成（${ch.revCount}/${MAX_REV}）`);
   } catch(err){
     document.getElementById('writeOutput').value=prev;
     updateOutWC();
-    const mt=ensureMetrics();
-    mt.revFail=(mt.revFail||0)+1;
     toast('❌ '+(err.message||'修改失败'));
   } finally {
     // ← ALWAYS re-enables button
@@ -1353,7 +1306,7 @@ function exportMd(){
 
 function clearProject(){
   if(!confirm('确认清除所有项目数据？此操作不可撤销。')) return;
-  proj={title:'',genre:'romance',style:'literary',intensity:3,qujia:false,charMain:'',charSub:'',worldBg:'',plotCore:'',chTotal:10,chWords:1500,chapters:[],metrics:{genOk:0,genFail:0,revOk:0,revFail:0,warnCount:0}};
+  proj={title:'',genre:'romance',style:'literary',intensity:3,qujia:false,charMain:'',charSub:'',worldBg:'',plotCore:'',chTotal:10,chWords:1500,chapters:[]};
   currentChIdx=-1;
   save();
   // 强制刷新所有页面的显示状态
@@ -1574,40 +1527,7 @@ function buildChapterSummary(text,target=108){
 
 function refreshChapterSummary(ch){
   if(!ch) return;
-  if(ch.ctxSummary) ch.ctxSummaryPrev=ch.ctxSummary;
   ch.ctxSummary=buildChapterSummary(ch.content||'');
-  if(!isSummaryReliable(ch.ctxSummary)){
-    ch.ctxSummary=buildFallbackSummary(ch.content||'');
-  }
-}
-
-function isSummaryReliable(summary){
-  const s=(summary||'').trim();
-  return s.length>=60&&['人物变化：','关键事件：','新增伏笔：','结尾状态：'].every(k=>s.includes(k));
-}
-
-function buildFallbackSummary(text){
-  const c=cleanForSummary(text);
-  if(!c) return '';
-  const a=clipText(c,22);
-  const b=clipText(c.slice(Math.min(40,c.length)),22);
-  const z=clipText(c.slice(-36),22);
-  return `人物变化：${a}；关键事件：${b||a}；新增伏笔：暂无明显新伏笔；结尾状态：${z||a}`;
-}
-
-function assessDraftQuality(ch,text){
-  const warns=[];
-  const t=(text||'').trim();
-  if(!t) return warns;
-  const main=(proj.charMain||'').split(/[，,、\s]/)[0].trim();
-  if(main&&main.length>=2&&!t.includes(main)) warns.push('主角姓名未出现，可能存在人设漂移');
-  const outline=(ch.outline||'').trim();
-  if(outline){
-    const keys=outline.split(/[，,。；;、\s]+/).map(v=>v.trim()).filter(v=>v.length>=2).slice(0,6);
-    const hit=keys.filter(k=>t.includes(k)).length;
-    if(keys.length>=3&&hit<=1) warns.push('与本章剧情提示的关键词重合较低');
-  }
-  return warns;
 }
 
 // ─── PROMPT BUILDERS ───
