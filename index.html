@@ -658,6 +658,7 @@ const STYLE_DESC = {
 // ─── STATE ───
 let cfg = { provider:'deepseek', model:'deepseek-chat', apiKeys:{deepseek:'',openai:'',claude:'',custom:''}, customEndpoint:'', maxTokens:4096, temperature:1.0, streaming:true, rememberKeys:false };
 let proj = { title:'', genre:'romance', style:'literary', intensity:3, qujia:false, charMain:'', charSub:'', worldBg:'', plotCore:'', chTotal:10, chWords:1500, chapters:[], metrics:{genOk:0,genFail:0,revOk:0,revFail:0,warnCount:0} };
+let proj = { title:'', genre:'romance', style:'literary', intensity:3, qujia:false, charMain:'', charSub:'', worldBg:'', plotCore:'', chTotal:10, chWords:1500, chapters:[] };
 let currentChIdx = -1;
 let isGenerating = false;
 let isRevising   = false;
@@ -679,6 +680,9 @@ const INT_SHORT_DESC = [
     const raw=localStorage.getItem(CFG_KEY);
     const parsed=unwrapVersioned(raw);
     if(parsed){
+    const s=localStorage.getItem(CFG_KEY);
+    if(s){
+      const parsed=JSON.parse(s);
       // 兼容旧版本：此前 cfg 含有 apiKeys 并保存在 localStorage
       if(parsed.apiKeys&&typeof parsed.apiKeys==='object'){
         Object.assign(cfg.apiKeys,parsed.apiKeys);
@@ -693,6 +697,7 @@ const INT_SHORT_DESC = [
     const parsed=unwrapVersioned(raw);
     if(parsed) Object.assign(proj,normalizeProject(parsed));
   }catch(e){}
+  try{ const s=localStorage.getItem(PROJ_KEY); if(s) Object.assign(proj, JSON.parse(s)); }catch(e){}
   updateAppHeight();
   window.addEventListener('resize',updateAppHeight);
   window.addEventListener('orientationchange',updateAppHeight);
@@ -724,6 +729,8 @@ function save(){
     delete cfgSnapshot.apiKeys;
     localStorage.setItem(CFG_KEY,JSON.stringify(wrapVersioned(cfgSnapshot)));
     localStorage.setItem(PROJ_KEY,JSON.stringify(wrapVersioned(normalizeProject(proj))));
+    localStorage.setItem(CFG_KEY,JSON.stringify(cfgSnapshot));
+    localStorage.setItem(PROJ_KEY, JSON.stringify(proj));
     persistApiKeys();
   } catch(e){ toast('⚠️ 存储失败（可能是无痕模式限制）'); }
 }
@@ -919,6 +926,7 @@ function loadDemo(){
 }
 
 function newCh(num){ return {id:Date.now()+num+Math.floor(Math.random()*9999),num,title:`第${num}章`,outline:'',content:'',ctxSummary:'',ctxSummaryPrev:'',revisions:[],revCount:0,status:'todo'}; }
+function newCh(num){ return {id:Date.now()+num+Math.floor(Math.random()*9999),num,title:`第${num}章`,outline:'',content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'}; }
 
 // ─── CHAPTERS ───
 function renderChapters(){
@@ -983,6 +991,7 @@ function resetCh(i,e){
   e.stopPropagation();
   if(!confirm('确认重置本章？内容和修改记录将被清空。')) return;
   Object.assign(proj.chapters[i],{content:'',ctxSummary:'',ctxSummaryPrev:'',revisions:[],revCount:0,status:'todo'});
+  Object.assign(proj.chapters[i],{content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'});
   save(); renderChapters(); toast('↩ 已重置');
 }
 
@@ -1597,6 +1606,7 @@ function assessDraftQuality(ch,text){
     if(keys.length>=3&&hit<=1) warns.push('与本章剧情提示的关键词重合较低');
   }
   return warns;
+  ch.ctxSummary=buildChapterSummary(ch.content||'');
 }
 
 // ─── PROMPT BUILDERS ───
