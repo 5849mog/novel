@@ -463,6 +463,13 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <input class="finput" type="password" id="cfgKey" placeholder="sk-…">
       <div class="fhint">🔒 仅存储于本地浏览器，不上传服务器<br><span class="key-status" id="cfgKeyStatus"></span></div>
     </div>
+    <div class="toggle-row" id="rememberKeyRow" onclick="toggleRememberKeys()" style="padding:10px 12px;">
+      <div>
+        <div class="tr-title" style="font-size:13px">💾 持久记住 API Key</div>
+        <div class="tr-sub">关闭后仅保存到当前会话（关闭浏览器后失效）</div>
+      </div>
+      <div class="sw" id="rememberKeySw"></div>
+    </div>
   </div>
   <div class="sec-hdr">🎛️ 生成参数</div>
   <div class="card">
@@ -525,6 +532,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 // ─── CONSTANTS ───
 const CFG_KEY  = 'mq2_cfg';
 const PROJ_KEY = 'mq2_proj';
+const API_KEYS_LOCAL_KEY = 'mq2_api_keys_local';
+const API_KEYS_SESSION_KEY = 'mq2_api_keys_session';
 const MAX_REV  = 4;
 
 const MC = {
@@ -646,7 +655,7 @@ const STYLE_DESC = {
 };
 
 // ─── STATE ───
-let cfg = { provider:'deepseek', model:'deepseek-chat', apiKeys:{deepseek:'',openai:'',claude:'',custom:''}, customEndpoint:'', maxTokens:4096, temperature:1.0, streaming:true };
+let cfg = { provider:'deepseek', model:'deepseek-chat', apiKeys:{deepseek:'',openai:'',claude:'',custom:''}, customEndpoint:'', maxTokens:4096, temperature:1.0, streaming:true, rememberKeys:false };
 let proj = { title:'', genre:'romance', style:'literary', intensity:3, qujia:false, charMain:'', charSub:'', worldBg:'', plotCore:'', chTotal:10, chWords:1500, chapters:[] };
 let currentChIdx = -1;
 let isGenerating = false;
@@ -665,7 +674,19 @@ const INT_SHORT_DESC = [
 
 // ─── BOOT ───
 (function boot(){
-  try{ const s=localStorage.getItem(CFG_KEY);  if(s) Object.assign(cfg,  JSON.parse(s)); }catch(e){}
+  try{
+    const s=localStorage.getItem(CFG_KEY);
+    if(s){
+      const parsed=JSON.parse(s);
+      // 兼容旧版本：此前 cfg 含有 apiKeys 并保存在 localStorage
+      if(parsed.apiKeys&&typeof parsed.apiKeys==='object'){
+        Object.assign(cfg.apiKeys,parsed.apiKeys);
+        cfg.rememberKeys=true;
+      }
+      Object.assign(cfg,parsed);
+    }
+  }catch(e){}
+  try{ Object.assign(cfg.apiKeys,loadApiKeys()); }catch(e){}
   try{ const s=localStorage.getItem(PROJ_KEY); if(s) Object.assign(proj, JSON.parse(s)); }catch(e){}
   updateAppHeight();
   window.addEventListener('resize',updateAppHeight);
@@ -694,9 +715,34 @@ function bindNativeTouchFeedback(){
 
 function save(){
   try{
-    localStorage.setItem(CFG_KEY,  JSON.stringify(cfg));
+    const cfgSnapshot={...cfg};
+    delete cfgSnapshot.apiKeys;
+    localStorage.setItem(CFG_KEY,JSON.stringify(cfgSnapshot));
     localStorage.setItem(PROJ_KEY, JSON.stringify(proj));
+    persistApiKeys();
   } catch(e){ toast('⚠️ 存储失败（可能是无痕模式限制）'); }
+}
+
+function loadApiKeys(){
+  const sessionRaw=sessionStorage.getItem(API_KEYS_SESSION_KEY);
+  const localRaw=localStorage.getItem(API_KEYS_LOCAL_KEY);
+  if(sessionRaw) return JSON.parse(sessionRaw);
+  if(localRaw){
+    cfg.rememberKeys=true;
+    return JSON.parse(localRaw);
+  }
+  return {};
+}
+
+function persistApiKeys(){
+  const keys=JSON.stringify(cfg.apiKeys||{});
+  if(cfg.rememberKeys){
+    localStorage.setItem(API_KEYS_LOCAL_KEY,keys);
+    sessionStorage.removeItem(API_KEYS_SESSION_KEY);
+  } else {
+    sessionStorage.setItem(API_KEYS_SESSION_KEY,keys);
+    localStorage.removeItem(API_KEYS_LOCAL_KEY);
+  }
 }
 
 // ─── NAV ───
@@ -1279,6 +1325,8 @@ function loadCfgForm(){
   document.getElementById('cfgEndpoint').value=cfg.customEndpoint||'';
   document.getElementById('streamSw').classList.toggle('on',cfg.streaming);
   document.getElementById('streamRow').classList.toggle('on',cfg.streaming);
+  document.getElementById('rememberKeySw').classList.toggle('on',cfg.rememberKeys);
+  document.getElementById('rememberKeyRow').classList.toggle('on',cfg.rememberKeys);
   updateKeyStatus();
 }
 
@@ -1318,6 +1366,14 @@ function toggleStream(){
   document.getElementById('streamSw').classList.toggle('on',cfg.streaming);
   document.getElementById('streamRow').classList.toggle('on',cfg.streaming);
   save(); // ← FIX: 之前漏掉了持久化
+}
+
+function toggleRememberKeys(){
+  cfg.rememberKeys=!cfg.rememberKeys;
+  document.getElementById('rememberKeySw').classList.toggle('on',cfg.rememberKeys);
+  document.getElementById('rememberKeyRow').classList.toggle('on',cfg.rememberKeys);
+  save();
+  toast(cfg.rememberKeys?'💾 API Key 将持久保存在本机':'🕒 API Key 仅保存到当前会话');
 }
 
 function saveCfg(){
@@ -1367,6 +1423,7 @@ async function testApi(){
   resultEl.style.display='block';
   resultEl.style.borderColor='var(--b1)';
   resultEl.style.color='var(--t2)';
+  resultEl.style.whiteSpace='pre-line';
   resultEl.textContent='正在连接，发送测试请求…';
 
   const startTime=Date.now();
@@ -1397,7 +1454,7 @@ async function testApi(){
       const errMsg=data?.error?.message||data?.message||`HTTP ${res.status}`;
       resultEl.style.borderColor='var(--red2)';
       resultEl.style.color='#ff7090';
-      resultEl.innerHTML=`❌ 连接失败（${res.status}）<br>${errMsg}`;
+      resultEl.textContent=`❌ 连接失败（${res.status}）\n${errMsg}`;
     } else {
       // 成功
       let reply='';
@@ -1405,7 +1462,7 @@ async function testApi(){
       else { reply=data?.choices?.[0]?.message?.content||''; }
       resultEl.style.borderColor='var(--jade)';
       resultEl.style.color='var(--jade2)';
-      resultEl.innerHTML=`✅ 连接成功 · 响应 ${elapsed}ms<br>模型：${model}<br>AI回复：${reply||'（空）'}`;
+      resultEl.textContent=`✅ 连接成功 · 响应 ${elapsed}ms\n模型：${model}\nAI回复：${reply||'（空）'}`;
     }
   } catch(err){
     const elapsed=Date.now()-startTime;
@@ -1413,9 +1470,9 @@ async function testApi(){
     resultEl.style.color='#ff7090';
     // 区分网络错误和其他错误
     const isNetErr=err instanceof TypeError&&err.message.includes('fetch');
-    resultEl.innerHTML=isNetErr
-      ?`❌ 网络错误（${elapsed}ms）<br>无法连接到服务器，请检查网络或 Endpoint 地址`
-      :`❌ 请求异常（${elapsed}ms）<br>${err.message}`;
+    resultEl.textContent=isNetErr
+      ?`❌ 网络错误（${elapsed}ms）\n无法连接到服务器，请检查网络或 Endpoint 地址`
+      :`❌ 请求异常（${elapsed}ms）\n${err.message}`;
   } finally {
     testBtn.disabled=false;
     testBtn.textContent='🔌 连通性测试';
