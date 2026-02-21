@@ -18,6 +18,7 @@
   --purple:#5b3fa0;--purple2:#7c5fcc;
   --t1:#ede8e0;--t2:#a09898;--t3:#666278;--t4:#3d3a50;
   --r:14px;--r-sm:10px;
+  --ease-out:cubic-bezier(.22,.86,.36,1);--ease-spring:cubic-bezier(.34,1.56,.64,1);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;overflow:hidden;}
@@ -26,7 +27,9 @@ body{background:var(--bg);color:var(--t1);font-family:'Noto Sans SC',sans-serif;
   max-width:480px;margin:0 auto;min-height:100svh;min-height:var(--app-height,100svh);overscroll-behavior:none;}
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   background:radial-gradient(ellipse 100% 60% at 50% -20%,rgba(155,31,53,.1) 0%,transparent 70%),
-  radial-gradient(ellipse 80% 50% at 100% 100%,rgba(91,63,160,.07) 0%,transparent 60%);}
+  radial-gradient(ellipse 80% 50% at 100% 100%,rgba(91,63,160,.07) 0%,transparent 60%);
+  animation:bg-drift 14s var(--ease-out) infinite alternate;}
+@keyframes bg-drift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(0,-6px,0) scale(1.02)}}
 #appRoot{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;overflow:hidden;
   background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 18%);}
 
@@ -48,9 +51,14 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
 /* PAGES */
 .page{display:none;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:14px 14px calc(84px + env(safe-area-inset-bottom,0));
-  overscroll-behavior-y:contain;scroll-padding-bottom:20px;animation:page-in .26s cubic-bezier(.2,.8,.2,1);}
+  overscroll-behavior-y:contain;scroll-padding-bottom:20px;animation:page-in .26s var(--ease-out);}
 .page.active{display:block;}
 @keyframes page-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.page.entering .card,.page.entering .toggle-row,.page.entering .ch-card,.page.entering .stat-box,.page.entering .empty,.page.entering .btn-primary,.page.entering .btn-sm{animation:item-rise .45s var(--ease-out) both;}
+.page.entering .card:nth-of-type(2),.page.entering .toggle-row:nth-of-type(2),.page.entering .ch-card:nth-of-type(2){animation-delay:.04s;}
+.page.entering .card:nth-of-type(3),.page.entering .toggle-row:nth-of-type(3),.page.entering .ch-card:nth-of-type(3){animation-delay:.08s;}
+.page.entering .card:nth-of-type(4),.page.entering .toggle-row:nth-of-type(4),.page.entering .ch-card:nth-of-type(4){animation-delay:.12s;}
+@keyframes item-rise{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
 
 /* BOTTOM NAV */
 .bnav{position:sticky;bottom:0;z-index:30;flex-shrink:0;background:rgba(8,8,16,.96);
@@ -61,9 +69,11 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   gap:3px;cursor:pointer;color:var(--t3);border:none;background:none;
   font-family:'Noto Sans SC',sans-serif;transition:color .2s,transform .16s;min-height:44px;touch-action:manipulation;}
 .bnav-item.active{color:var(--gold);}
+.bnav-item.active .bnav-icon{animation:nav-pop .32s var(--ease-spring);}
 .bnav-item:active{transform:translateY(1px) scale(.98);}
 .bnav-icon{font-size:20px;line-height:1;}
 .bnav-label{font-size:10px;font-weight:500;letter-spacing:.5px;}
+@keyframes nav-pop{0%{transform:translateY(1px) scale(.86)}70%{transform:translateY(-1px) scale(1.08)}100%{transform:translateY(0) scale(1)}}
 
 /* SECTION HEADER */
 .sec-hdr{font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;
@@ -72,7 +82,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .sec-hdr:first-child{margin-top:0;}
 
 /* CARD */
-.card{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:14px;margin-bottom:10px;}
+.card{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:14px;margin-bottom:10px;transition:border-color .24s var(--ease-out),transform .24s var(--ease-out);}
+.card:hover{border-color:var(--b2);transform:translateY(-1px);}
 
 /* FORM */
 .frow{margin-bottom:13px;}
@@ -109,9 +120,10 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   border:1px solid rgba(196,40,64,.5);border-radius:var(--r);color:#fff;
   font-family:'Noto Serif SC',serif;font-size:15px;font-weight:700;letter-spacing:4px;
   cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
-  transition:opacity .2s;position:relative;overflow:hidden;}
+  transition:opacity .2s,transform .2s var(--ease-out),box-shadow .2s var(--ease-out);position:relative;overflow:hidden;}
 .btn-primary::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.1),transparent);}
 .btn-primary:active{opacity:.9;transform:translateY(1px) scale(.995);}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.26);}
 .btn-primary:disabled{opacity:.35;cursor:not-allowed;}
 .btn-gold{background:linear-gradient(135deg,var(--gold),#8a6020)!important;border-color:rgba(200,164,74,.4)!important;color:#1a1005!important;}
 .btn-ghost{background:var(--s2)!important;border:1px solid var(--b1)!important;color:var(--t2)!important;font-family:'Noto Sans SC',serif!important;letter-spacing:2px!important;}
@@ -684,17 +696,20 @@ function save(){
 
 // ─── NAV ───
 function nav(p){
-  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active','entering'));
   document.querySelectorAll('.bnav-item').forEach(el=>el.classList.remove('active'));
-  document.getElementById('page-'+p).classList.add('active');
+  const pageEl=document.getElementById('page-'+p);
+  if(!pageEl) return;
+  pageEl.classList.add('active');
+  void pageEl.offsetWidth;
+  pageEl.classList.add('entering');
   const nb=document.getElementById('bnav-'+p);
   if(nb) nb.classList.add('active');
   if(p==='chapters') renderChapters();
   if(p==='write')    renderWrite();
   if(p==='stats')    renderStats();
   if(p==='settings') loadCfgForm();
-  const pageEl=document.getElementById('page-'+p);
-  if(pageEl) pageEl.scrollTo({top:0,behavior:'smooth'});
+  pageEl.scrollTo({top:0,behavior:'smooth'});
 }
 
 function initWriteInteractions(){
