@@ -890,7 +890,7 @@ function loadDemo(){
   save(); syncSetupForm(); toast('📖 演示项目已加载！'); nav('chapters');
 }
 
-function newCh(num){ return {id:Date.now()+num+Math.floor(Math.random()*9999),num,title:`第${num}章`,outline:'',content:'',revisions:[],revCount:0,status:'todo'}; }
+function newCh(num){ return {id:Date.now()+num+Math.floor(Math.random()*9999),num,title:`第${num}章`,outline:'',content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'}; }
 
 // ─── CHAPTERS ───
 function renderChapters(){
@@ -954,7 +954,7 @@ function copyChById(id,e){
 function resetCh(i,e){
   e.stopPropagation();
   if(!confirm('确认重置本章？内容和修改记录将被清空。')) return;
-  Object.assign(proj.chapters[i],{content:'',revisions:[],revCount:0,status:'todo'});
+  Object.assign(proj.chapters[i],{content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'});
   save(); renderChapters(); toast('↩ 已重置');
 }
 
@@ -1108,6 +1108,7 @@ async function generateChapter(){
     const result=document.getElementById('writeOutput').value;
     if(!result) throw new Error('AI返回了空内容，请重试');
     ch.content=result; ch.status='writing';
+    refreshChapterSummary(ch);
     save(); updateRevPanel();
     document.getElementById('copyChBtn').style.display='inline-flex';
     document.getElementById('saveChBtn').style.display='inline-flex';
@@ -1151,6 +1152,7 @@ async function doRevision(){
     if(!result) throw new Error('AI返回了空内容，请重试');
     ch.revisions.push({round:ch.revCount+1,inst,before:prev,after:result});
     ch.content=result; ch.revCount++;
+    refreshChapterSummary(ch);
     save(); document.getElementById('revInput').value='';
     updateRevPanel();
     toast(`✏️ 修改完成（${ch.revCount}/${MAX_REV}）`);
@@ -1167,6 +1169,7 @@ async function doRevision(){
 function saveChapter(){
   const ch=proj.chapters[currentChIdx];
   ch.content=document.getElementById('writeOutput').value;
+  refreshChapterSummary(ch);
   ch.status='done'; save(); renderChapters();
   document.getElementById('saveChBtn').style.display='none';
   toast(`💾 第${ch.num}章已存档！`);
@@ -1479,6 +1482,54 @@ async function testApi(){
   }
 }
 
+function clipText(s,max){
+  const t=(s||'').trim();
+  if(!t) return '';
+  return t.length>max?t.slice(0,max)+'…':t;
+}
+
+function cleanForSummary(text){
+  return (text||'').replace(/\s+/g,' ').replace(/　/g,' ').trim();
+}
+
+function splitSentences(text){
+  return cleanForSummary(text).split(/[。！？!?]/).map(s=>s.trim()).filter(Boolean);
+}
+
+function pickKeySentence(sentences,fallback,maxLen){
+  if(!sentences.length) return clipText(fallback,maxLen);
+  const pool=sentences.filter(s=>s.length>=8);
+  return clipText((pool[0]||sentences[0]||fallback),maxLen);
+}
+
+function findForeshadow(sentences){
+  const hit=sentences.find(s=>/(线索|秘密|预感|异常|似乎|忽然|计划|约定|钥匙|来信|电话|名单|真相|背后)/.test(s));
+  return clipText(hit||'暂无明显新伏笔，重点在推进当前冲突。',26);
+}
+
+function buildChapterSummary(text,target=108){
+  const clean=cleanForSummary(text);
+  if(!clean) return '';
+  const sents=splitSentences(clean);
+  const head=pickKeySentence(sents,clean,24);
+  const middle=pickKeySentence(sents.slice(1),clean.slice(Math.min(28,clean.length)),24);
+  const tail=clipText(clean.slice(-40),24);
+  const fz=findForeshadow(sents);
+  let summary=`人物变化：${head}；关键事件：${middle}；新增伏笔：${fz}；结尾状态：${tail}`;
+  summary=cleanForSummary(summary);
+  if(summary.length>target+12) summary=clipText(summary,target);
+  if(summary.length<80){
+    const pad=clipText(clean,Math.max(0,80-summary.length));
+    if(pad) summary=clipText(`${summary} ${pad}`,target+12);
+  }
+  return summary;
+}
+
+function refreshChapterSummary(ch){
+  if(!ch) return;
+  ch.ctxSummary=buildChapterSummary(ch.content||'');
+}
+
 // ─── PROMPT BUILDERS ───
 function buildSys(){
   return `你是一位顶尖的中文网络小说写手，专精于${GENRE_DESC[proj.genre]||proj.genre}。
@@ -1516,7 +1567,7 @@ function buildChPrompt(ch){
     const parts=[];
     if(earlier.length){
       parts.push('【前情概要（各章节摘要）】');
-      earlier.forEach(c=>parts.push(`${c.title}：${c.content.slice(0,120).trim()}…`));
+      earlier.forEach(c=>{ const brief=(c.ctxSummary&&c.ctxSummary.trim())||buildChapterSummary(c.content||''); parts.push(`${c.title}：${brief}`); });
     }
     parts.push(`\n【上一章结尾 · ${last.title}】`);
     // Take the last 800 chars of previous chapter for strong continuity
