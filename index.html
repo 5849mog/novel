@@ -156,6 +156,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .ch-status.todo{background:var(--s4);color:var(--t3);}
 .ch-status.writing{background:rgba(200,164,74,.15);color:var(--gold);}
 .ch-status.done{background:rgba(45,107,79,.2);color:var(--jade2);}
+.ch-status.generating{background:rgba(137,78,204,.18);color:#d9b8ff;}
+.ch-status.revising{background:rgba(91,63,160,.22);color:#d4c0ff;}
 .ch-actions{display:flex;gap:7px;padding:0 15px 13px;flex-wrap:wrap;}
 .rev-badge{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;background:rgba(91,63,160,.2);color:var(--purple2);}
 
@@ -760,6 +762,10 @@ function isBusy(){
   return isGenerating||isRevising;
 }
 
+function getActiveChapterId(){
+  return activeGenChapterId||activeRevChapterId||null;
+}
+
 function updateOpStatus(){
   const el=document.getElementById('opStatus');
   if(!el) return;
@@ -776,6 +782,8 @@ function updateOpStatus(){
 }
 
 function syncWriteLocks(){
+  const currentId=(currentChIdx>=0&&proj.chapters[currentChIdx])?proj.chapters[currentChIdx].id:null;
+  const busy=currentId&&currentId===getActiveChapterId();
   const busy=isBusy();
   const out=document.getElementById('writeOutput');
   if(out) out.readOnly=busy;
@@ -949,14 +957,19 @@ function renderChapters(){
     <span style="font-size:11px;color:var(--t3)">${done}/${proj.chapters.length}章 · ${pct}%</span>
   </div><div class="prog-wrap"><div class="prog-bar" style="width:${pct}%"></div></div>`;
 
-  list.innerHTML=proj.chapters.map((ch,i)=>`
+  list.innerHTML=proj.chapters.map((ch,i)=>{
+    const isGen=activeGenChapterId===ch.id;
+    const isRev=activeRevChapterId===ch.id;
+    const statusClass=isGen?'generating':isRev?'revising':ch.status;
+    const statusText=isGen?'生成中':isRev?'修改中':({todo:'待创作',writing:'创作中',done:'✓ 完成'}[ch.status]);
+    return `
     <div class="ch-card ${ch.status==='done'?'done':currentChIdx===i?'current':''}">
       <div class="ch-head" onclick="selectCh(${i})">
         <div class="ch-num">${ch.num}</div>
         <div class="ch-info">
           <div class="ch-title-text">${X(ch.title)}</div>
           <div class="ch-meta">
-            <span class="ch-status ${ch.status}">${{todo:'待创作',writing:'创作中',done:'✓ 完成'}[ch.status]}</span>
+            <span class="ch-status ${statusClass}">${statusText}</span>
             ${ch.content?`<span>${ch.content.length}字</span>`:''}
             ${ch.revCount>0?`<span class="rev-badge">改${ch.revCount}次</span>`:''}
           </div>
@@ -969,7 +982,8 @@ function renderChapters(){
         ${ch.status==='done'?`<button class="btn-sm" onclick="resetCh(${i},event)">↩ 重写</button>`:''}
         <button class="btn-sm danger" onclick="deleteCh(${i},event)">🗑️ 删除</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('addChBtn').style.display='block';
 }
 
@@ -1001,6 +1015,8 @@ function resetCh(i,e){
 
 function deleteCh(i,e){
   e.stopPropagation();
+  const activeId=getActiveChapterId();
+  if(activeId&&proj.chapters[i]?.id===activeId){ toast('⏳ 该章节正在生成/修改中，暂不可删除'); return; }
   if(isBusy()){ toast('⏳ 当前有进行中的任务，暂不可删除章节'); return; }
   if(proj.chapters.length<=1){ toast('⚠️ 至少保留一章'); return; }
   const ch=proj.chapters[i];
@@ -1316,6 +1332,8 @@ function normalizePatchText(s){
 }
 
 function saveChapter(){
+  const activeId=getActiveChapterId();
+  if(activeId&&proj.chapters[currentChIdx]?.id===activeId){ toast('⏳ 本章正在生成/修改中，暂不能确认'); return; }
   if(isBusy()){ toast('⏳ 正在生成/修改中，暂不能确认本章'); return; }
   const ch=proj.chapters[currentChIdx];
   ch.content=document.getElementById('writeOutput').value;
