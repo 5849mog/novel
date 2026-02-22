@@ -114,7 +114,7 @@ API Key 存在你本地浏览器。想让它只活在这次会话里——关掉
 
 ```bash
 # 一
-git clone https://github.com/your-username/moyuan-studio.git
+git clone https://github.com/5849mog/moyuan-studio.git
 
 # 二
 双击 index.html
