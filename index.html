@@ -156,6 +156,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .ch-status.todo{background:var(--s4);color:var(--t3);}
 .ch-status.writing{background:rgba(200,164,74,.15);color:var(--gold);}
 .ch-status.done{background:rgba(45,107,79,.2);color:var(--jade2);}
+.ch-status.generating{background:rgba(137,78,204,.18);color:#d9b8ff;}
+.ch-status.revising{background:rgba(91,63,160,.22);color:#d4c0ff;}
 .ch-actions{display:flex;gap:7px;padding:0 15px 13px;flex-wrap:wrap;}
 .rev-badge{font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;background:rgba(91,63,160,.2);color:var(--purple2);}
 
@@ -367,6 +369,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <span class="wc-chip" id="writeWC">0字</span>
       <span id="qjWriteBadge" style="display:none;font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;background:var(--red3);border:1px solid var(--red2);color:#ff7090;">🔓 去甲</span>
       <span class="stream-label" id="streamLabel">● 生成中</span>
+      <span class="rev-badge" id="opStatus" style="display:none"></span>
     </div>
     <div class="frow">
       <label class="flabel">本章剧情提示</label>
@@ -666,6 +669,8 @@ let isGenerating = false;
 let isRevising   = false;
 let draftSaveTimer = null;
 let draftStatusTimer = null;
+let activeGenChapterId = null;
+let activeRevChapterId = null;
 
 // ─── 强度档位说明（必须在 boot() 之前定义）───
 const INT_SHORT_DESC = [
@@ -747,6 +752,44 @@ function persistApiKeys(){
     sessionStorage.setItem(API_KEYS_SESSION_KEY,keys);
     localStorage.removeItem(API_KEYS_LOCAL_KEY);
   }
+}
+
+function getChapterById(id){
+  return proj.chapters.find(c=>c.id===id)||null;
+}
+
+function isBusy(){
+  return isGenerating||isRevising;
+}
+
+function getActiveChapterId(){
+  return activeGenChapterId||activeRevChapterId||null;
+}
+
+function updateOpStatus(){
+  const el=document.getElementById('opStatus');
+  if(!el) return;
+  let text='';
+  if(isGenerating&&activeGenChapterId){
+    const ch=getChapterById(activeGenChapterId);
+    text=ch?`⏳ 正在生成：${ch.title}`:'⏳ 正在生成章节';
+  } else if(isRevising&&activeRevChapterId){
+    const ch=getChapterById(activeRevChapterId);
+    text=ch?`⏳ 正在修改：${ch.title}`:'⏳ 正在修改章节';
+  }
+  el.style.display=text?'inline-flex':'none';
+  el.textContent=text;
+}
+
+function syncWriteLocks(){
+  const currentId=(currentChIdx>=0&&proj.chapters[currentChIdx])?proj.chapters[currentChIdx].id:null;
+  const busy=currentId&&currentId===getActiveChapterId();
+  const out=document.getElementById('writeOutput');
+  if(out) out.readOnly=busy;
+  const saveBtn=document.getElementById('saveChBtn');
+  if(saveBtn) saveBtn.disabled=busy;
+  const copyBtn=document.getElementById('copyChBtn');
+  if(copyBtn) copyBtn.disabled=busy;
 }
 
 // ─── NAV ───
@@ -913,14 +956,19 @@ function renderChapters(){
     <span style="font-size:11px;color:var(--t3)">${done}/${proj.chapters.length}章 · ${pct}%</span>
   </div><div class="prog-wrap"><div class="prog-bar" style="width:${pct}%"></div></div>`;
 
-  list.innerHTML=proj.chapters.map((ch,i)=>`
+  list.innerHTML=proj.chapters.map((ch,i)=>{
+    const isGen=activeGenChapterId===ch.id;
+    const isRev=activeRevChapterId===ch.id;
+    const statusClass=isGen?'generating':isRev?'revising':ch.status;
+    const statusText=isGen?'生成中':isRev?'修改中':({todo:'待创作',writing:'创作中',done:'✓ 完成'}[ch.status]);
+    return `
     <div class="ch-card ${ch.status==='done'?'done':currentChIdx===i?'current':''}">
       <div class="ch-head" onclick="selectCh(${i})">
         <div class="ch-num">${ch.num}</div>
         <div class="ch-info">
           <div class="ch-title-text">${X(ch.title)}</div>
           <div class="ch-meta">
-            <span class="ch-status ${ch.status}">${{todo:'待创作',writing:'创作中',done:'✓ 完成'}[ch.status]}</span>
+            <span class="ch-status ${statusClass}">${statusText}</span>
             ${ch.content?`<span>${ch.content.length}字</span>`:''}
             ${ch.revCount>0?`<span class="rev-badge">改${ch.revCount}次</span>`:''}
           </div>
@@ -933,7 +981,8 @@ function renderChapters(){
         ${ch.status==='done'?`<button class="btn-sm" onclick="resetCh(${i},event)">↩ 重写</button>`:''}
         <button class="btn-sm danger" onclick="deleteCh(${i},event)">🗑️ 删除</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('addChBtn').style.display='block';
 }
 
@@ -964,6 +1013,8 @@ function resetCh(i,e){
 
 function deleteCh(i,e){
   e.stopPropagation();
+  const activeId=getActiveChapterId();
+  if(activeId&&proj.chapters[i]?.id===activeId){ toast('⏳ 该章节正在生成/修改中，暂不可删除'); return; }
   if(proj.chapters.length<=1){ toast('⚠️ 至少保留一章'); return; }
   const ch=proj.chapters[i];
   const hasContent=!!ch.content;
@@ -994,10 +1045,6 @@ function addChapter(){
 
 // ─── WRITE ───
 function renderWrite(){
-  // KEY FIX: Always reset loading state when entering write page
-  setGenLoad(false);
-  setRevLoad(false);
-
   const empty=document.getElementById('writeEmpty');
   const panel=document.getElementById('writePanel');
 
@@ -1024,6 +1071,8 @@ function renderWrite(){
   document.getElementById('copyChBtn').style.display = has?'inline-flex':'none';
   document.getElementById('saveChBtn').style.display = (has&&ch.status!=='done')?'inline-flex':'none';
   setDraftStatus('草稿会自动保存到本地');
+  updateOpStatus();
+  syncWriteLocks();
 }
 
 function updateOutWC(){
@@ -1063,36 +1112,46 @@ function updateRevPanel(){
 // Loading state setters — always safe to call even after DOM changes
 function setGenLoad(on){
   isGenerating=on;
-  const btn=document.getElementById('genBtn'); if(!btn) return;
-  btn.disabled=on;
-  document.getElementById('genSpinner').style.display=on?'block':'none';
-  document.getElementById('genLabel').textContent=on?'创 作 中…':'✦ 生 成 本 章';
-  document.getElementById('streamLabel').classList.toggle('on',on&&cfg.streaming);
+  const btn=document.getElementById('genBtn'); if(btn) btn.disabled=on;
+  const spin=document.getElementById('genSpinner'); if(spin) spin.style.display=on?'block':'none';
+  const lbl=document.getElementById('genLabel'); if(lbl) lbl.textContent=on?'创 作 中…':'✦ 生 成 本 章';
+  const stream=document.getElementById('streamLabel'); if(stream) stream.classList.toggle('on',on&&cfg.streaming);
+  updateOpStatus();
+  syncWriteLocks();
 }
 
 function setRevLoad(on){
   isRevising=on;
-  const btn=document.getElementById('revBtn'); if(!btn) return;
+  const btn=document.getElementById('revBtn');
   const ch=currentChIdx>=0?proj.chapters[currentChIdx]:null;
-  btn.disabled=on||(ch&&ch.revCount>=MAX_REV);
-  document.getElementById('revSpinner').style.display=on?'block':'none';
-  document.getElementById('revLabel').textContent=on?'修改中…':'⟳ 提交修改';
+  if(btn) btn.disabled=on||(ch&&ch.revCount>=MAX_REV);
+  const spin=document.getElementById('revSpinner'); if(spin) spin.style.display=on?'block':'none';
+  const lbl=document.getElementById('revLabel'); if(lbl) lbl.textContent=on?'修改中…':'⟳ 提交修改';
+  updateOpStatus();
+  syncWriteLocks();
 }
 
 // ─── GENERATE ───
 async function generateChapter(){
   if(isGenerating){ toast('⏳ 正在生成，请稍候'); return; }
+  if(isRevising){ toast('⏳ 正在修改，请稍候'); return; }
   if(currentChIdx<0){ toast('⚠️ 请先选择章节'); return; }
   const apiKey=cfg.apiKeys[cfg.provider];
   if(!apiKey){ toast('⚠️ 请先配置 API Key'); nav('settings'); return; }
   if(!proj.plotCore){ toast('⚠️ 请先填写故事大纲'); return; }
 
-  const ch=proj.chapters[currentChIdx];
+  const targetIdx=currentChIdx;
+  const ch=proj.chapters[targetIdx];
+  if(!ch) return;
+  const targetChapterId=ch.id;
+  activeGenChapterId=targetChapterId;
+
   ch.outline = document.getElementById('chOutlineInput').value.trim();
-  ch.extra   = document.getElementById('chExtra').value.trim(); // ← 持久化 extra
+  ch.extra   = document.getElementById('chExtra').value.trim();
   save();
 
-  const prevContent = ch.content; // ← 保留旧内容，失败时恢复
+  const prevContent = ch.content;
+  let streamText='';
 
   setGenLoad(true);
   document.getElementById('writeOutput').value='';
@@ -1104,36 +1163,67 @@ async function generateChapter(){
     const sys=buildSys();
     const user=buildChPrompt(ch);
     if(cfg.streaming){
-      await doStream(sys,user,(txt)=>{ document.getElementById('writeOutput').value=txt; updateOutWC(); });
+      await doStream(sys,user,(txt)=>{
+        streamText=txt;
+        const activeCh=getChapterById(targetChapterId);
+        if(activeCh) activeCh.content=txt;
+        if(currentChIdx>=0&&proj.chapters[currentChIdx]?.id===targetChapterId){
+          document.getElementById('writeOutput').value=txt;
+          updateOutWC();
+        }
+      });
     } else {
       const r=await doBlock(sys,user);
-      document.getElementById('writeOutput').value=r; updateOutWC();
+      streamText=r;
+      const activeCh=getChapterById(targetChapterId);
+      if(activeCh) activeCh.content=r;
+      if(currentChIdx>=0&&proj.chapters[currentChIdx]?.id===targetChapterId){
+        document.getElementById('writeOutput').value=r;
+        updateOutWC();
+      }
     }
-    const result=document.getElementById('writeOutput').value;
+
+    const result=streamText||'';
     if(!result) throw new Error('AI返回了空内容，请重试');
-    ch.content=result; ch.status='writing';
-    refreshChapterSummary(ch);
-    save(); updateRevPanel();
-    document.getElementById('copyChBtn').style.display='inline-flex';
-    document.getElementById('saveChBtn').style.display='inline-flex';
+
+    const doneCh=getChapterById(targetChapterId);
+    if(!doneCh) throw new Error('目标章节不存在，可能已被删除');
+    doneCh.content=result;
+    doneCh.status='writing';
+    refreshChapterSummary(doneCh);
+    save();
+
+    if(currentChIdx>=0&&proj.chapters[currentChIdx]?.id===targetChapterId){
+      updateRevPanel();
+      document.getElementById('copyChBtn').style.display='inline-flex';
+      document.getElementById('saveChBtn').style.display='inline-flex';
+    }
     renderChapters();
-    toast(`✅ 第${ch.num}章已生成！共${result.length}字`);
+    toast(`✅ 第${doneCh.num}章已生成！共${result.length}字`);
   } catch(err){
-    // ← FIX: 失败时恢复原有内容，不清空用户之前的工作
-    document.getElementById('writeOutput').value = prevContent||'';
-    updateOutWC();
-    if(prevContent){ updateRevPanel(); }
+    const rollbackCh=getChapterById(targetChapterId);
+    if(rollbackCh) rollbackCh.content=prevContent||'';
+    if(currentChIdx>=0&&proj.chapters[currentChIdx]?.id===targetChapterId){
+      document.getElementById('writeOutput').value = prevContent||'';
+      updateOutWC();
+      if(prevContent){ updateRevPanel(); }
+    }
     toast('❌ '+(err.message||'生成失败，请检查API配置'));
   } finally {
+    activeGenChapterId=null;
     setGenLoad(false);
+    renderChapters();
+    if(currentChIdx>=0) renderWrite();
   }
 }
 
 // ─── REVISION ───
 async function doRevision(){
+  if(isGenerating){ toast('⏳ 正在生成中，请稍后修改'); return; }
   if(isRevising){ toast('⏳ 正在修改，请稍候'); return; }
   const ch=proj.chapters[currentChIdx];
   if(!ch||ch.revCount>=MAX_REV){ toast('🔒 修改配额已用完'); return; }
+  const targetChapterId=ch.id;
   const inst=document.getElementById('revInput').value.trim();
   if(!inst){ toast('⚠️ 请输入修改要求'); return; }
   const apiKey=cfg.apiKeys[cfg.provider];
@@ -1170,6 +1260,7 @@ async function doRevision(){
 
   if(isPartial&&selectedText.trim().length<2){ toast('⚠️ 待修改片段太短，请补充更完整的句子'); return; }
 
+  activeRevChapterId=targetChapterId;
   setRevLoad(true);
   if(!isPartial) outEl.value='';
 
@@ -1196,20 +1287,24 @@ async function doRevision(){
       result=outEl.value;
     }
     if(!result) throw new Error('AI返回了空内容，请重试');
-    ch.revisions.push({round:ch.revCount+1,mode:isPartial?'partial':'full',inst,before:prev,after:result});
-    ch.content=result; ch.revCount++;
-    refreshChapterSummary(ch);
+    const doneCh=getChapterById(targetChapterId);
+    if(!doneCh) throw new Error('目标章节不存在，可能已被删除');
+    doneCh.revisions.push({round:doneCh.revCount+1,mode:isPartial?'partial':'full',inst,before:prev,after:result});
+    doneCh.content=result; doneCh.revCount++;
+    refreshChapterSummary(doneCh);
     save(); document.getElementById('revInput').value='';
     if(revTargetEl) revTargetEl.value='';
     updateRevPanel();
-    toast(isPartial?`🎯 局部微调完成（${ch.revCount}/${MAX_REV}）`:`✏️ 整章改写完成（${ch.revCount}/${MAX_REV}）`);
+    toast(isPartial?`🎯 局部微调完成（${doneCh.revCount}/${MAX_REV}）`:`✏️ 整章改写完成（${doneCh.revCount}/${MAX_REV}）`);
   } catch(err){
     outEl.value=prev;
     updateOutWC();
     toast('❌ '+(err.message||'修改失败'));
   } finally {
-    // ← ALWAYS re-enables button
+    activeRevChapterId=null;
     setRevLoad(false);
+    renderChapters();
+    if(currentChIdx>=0) renderWrite();
   }
 }
 
@@ -1233,6 +1328,8 @@ function normalizePatchText(s){
 }
 
 function saveChapter(){
+  const activeId=getActiveChapterId();
+  if(activeId&&proj.chapters[currentChIdx]?.id===activeId){ toast('⏳ 本章正在生成/修改中，暂不能确认'); return; }
   const ch=proj.chapters[currentChIdx];
   ch.content=document.getElementById('writeOutput').value;
   refreshChapterSummary(ch);
@@ -1279,7 +1376,10 @@ function renderStats(){
     </div>`).join('');
 }
 
-function goWriteCh(id){ const i=proj.chapters.findIndex(c=>c.id===id); if(i>=0){ currentChIdx=i; nav('write'); } }
+function goWriteCh(id){
+  const i=proj.chapters.findIndex(c=>c.id===id);
+  if(i>=0){ currentChIdx=i; nav('write'); }
+}
 
 // ─── EXPORT TXT ───
 function buildExportText(format='txt'){
@@ -1371,6 +1471,7 @@ function exportMd(){
 }
 
 function clearProject(){
+  if(isBusy()){ toast('⏳ 当前有进行中的任务，暂不可清除项目'); return; }
   if(!confirm('确认清除所有项目数据？此操作不可撤销。')) return;
   proj={title:'',genre:'romance',style:'literary',intensity:3,qujia:false,charMain:'',charSub:'',worldBg:'',plotCore:'',chTotal:10,chWords:1500,chapters:[]};
   currentChIdx=-1;
