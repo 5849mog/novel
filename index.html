@@ -670,6 +670,47 @@ let draftStatusTimer = null;
 let activeGenChapterId = null;
 let activeRevChapterId = null;
 
+function clampInt(v, fallback, min, max){
+  const n=Number.parseInt(v,10);
+  if(Number.isNaN(n)) return fallback;
+  return Math.min(max,Math.max(min,n));
+}
+
+function createChapterId(){
+  if(window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `ch_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
+}
+
+function sanitizeProject(raw){
+  if(!raw||typeof raw!=='object') return;
+  proj.title=typeof raw.title==='string'?raw.title:proj.title;
+  proj.genre=typeof raw.genre==='string'?raw.genre:proj.genre;
+  proj.style=typeof raw.style==='string'?raw.style:proj.style;
+  proj.intensity=clampInt(raw.intensity,proj.intensity,1,5);
+  proj.qujia=Boolean(raw.qujia);
+  proj.charMain=typeof raw.charMain==='string'?raw.charMain:proj.charMain;
+  proj.charSub=typeof raw.charSub==='string'?raw.charSub:proj.charSub;
+  proj.worldBg=typeof raw.worldBg==='string'?raw.worldBg:proj.worldBg;
+  proj.plotCore=typeof raw.plotCore==='string'?raw.plotCore:proj.plotCore;
+  proj.chTotal=clampInt(raw.chTotal,proj.chTotal,1,50);
+  proj.chWords=clampInt(raw.chWords,proj.chWords,800,3000);
+
+  if(Array.isArray(raw.chapters)){
+    proj.chapters=raw.chapters.map((c,i)=>({
+      id:(typeof c?.id==='string'||typeof c?.id==='number')?c.id:createChapterId(),
+      num:i+1,
+      title:typeof c?.title==='string'&&c.title.trim()?c.title.trim():`第${i+1}章`,
+      outline:typeof c?.outline==='string'?c.outline:'',
+      content:typeof c?.content==='string'?c.content:'',
+      ctxSummary:typeof c?.ctxSummary==='string'?c.ctxSummary:'',
+      revisions:Array.isArray(c?.revisions)?c.revisions:[],
+      revCount:clampInt(c?.revCount,0,0,MAX_REV),
+      status:['todo','writing','done'].includes(c?.status)?c.status:'todo'
+    }));
+    proj.chTotal=proj.chapters.length||proj.chTotal;
+  }
+}
+
 // ─── 强度档位说明（必须在 boot() 之前定义）───
 const INT_SHORT_DESC = [
   '情感点到为止，无肢体延伸，克制内敛',
@@ -694,7 +735,10 @@ const INT_SHORT_DESC = [
     }
   }catch(e){}
   try{ Object.assign(cfg.apiKeys,loadApiKeys()); }catch(e){}
-  try{ const s=localStorage.getItem(PROJ_KEY); if(s) Object.assign(proj, JSON.parse(s)); }catch(e){}
+  try{
+    const s=localStorage.getItem(PROJ_KEY);
+    if(s) sanitizeProject(JSON.parse(s));
+  } catch(e){}
   updateAppHeight();
   window.addEventListener('resize',updateAppHeight);
   window.addEventListener('orientationchange',updateAppHeight);
@@ -733,10 +777,16 @@ function save(){
 function loadApiKeys(){
   const sessionRaw=sessionStorage.getItem(API_KEYS_SESSION_KEY);
   const localRaw=localStorage.getItem(API_KEYS_LOCAL_KEY);
-  if(sessionRaw) return JSON.parse(sessionRaw);
+  if(sessionRaw){
+    try{ return JSON.parse(sessionRaw); }catch(e){ sessionStorage.removeItem(API_KEYS_SESSION_KEY); }
+  }
   if(localRaw){
-    cfg.rememberKeys=true;
-    return JSON.parse(localRaw);
+    try{
+      cfg.rememberKeys=true;
+      return JSON.parse(localRaw);
+    } catch(e){
+      localStorage.removeItem(API_KEYS_LOCAL_KEY);
+    }
   }
   return {};
 }
@@ -905,8 +955,8 @@ function readSetup(){
   proj.charSub  = document.getElementById('charSub').value.trim();
   proj.worldBg  = document.getElementById('worldBg').value.trim();
   proj.plotCore = document.getElementById('plotCore').value.trim();
-  proj.chTotal  = parseInt(document.getElementById('chTotal').value);
-  proj.chWords  = parseInt(document.getElementById('chWords').value);
+  proj.chTotal  = clampInt(document.getElementById('chTotal').value,10,1,50);
+  proj.chWords  = clampInt(document.getElementById('chWords').value,1500,800,3000);
 }
 
 function initProject(){
@@ -930,7 +980,7 @@ function loadDemo(){
   save(); syncSetupForm(); toast('📖 演示项目已加载！'); nav('chapters');
 }
 
-function newCh(num){ return {id:Date.now()+num+Math.floor(Math.random()*9999),num,title:`第${num}章`,outline:'',content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'}; }
+function newCh(num){ return {id:createChapterId(),num,title:`第${num}章`,outline:'',content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'}; }
 
 // ─── CHAPTERS ───
 function renderChapters(){
