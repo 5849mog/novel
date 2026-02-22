@@ -784,6 +784,7 @@ function updateOpStatus(){
 function syncWriteLocks(){
   const currentId=(currentChIdx>=0&&proj.chapters[currentChIdx])?proj.chapters[currentChIdx].id:null;
   const busy=currentId&&currentId===getActiveChapterId();
+  const busy=isBusy();
   const out=document.getElementById('writeOutput');
   if(out) out.readOnly=busy;
   const saveBtn=document.getElementById('saveChBtn');
@@ -987,6 +988,7 @@ function renderChapters(){
 }
 
 function selectCh(i){
+  if(isBusy()){ toast('⏳ 当前有进行中的任务，请等待完成后再切换章节'); return; }
   currentChIdx=i;
   if(proj.chapters[i].status==='todo') proj.chapters[i].status='writing';
   save(); nav('write');
@@ -1015,6 +1017,7 @@ function deleteCh(i,e){
   e.stopPropagation();
   const activeId=getActiveChapterId();
   if(activeId&&proj.chapters[i]?.id===activeId){ toast('⏳ 该章节正在生成/修改中，暂不可删除'); return; }
+  if(isBusy()){ toast('⏳ 当前有进行中的任务，暂不可删除章节'); return; }
   if(proj.chapters.length<=1){ toast('⚠️ 至少保留一章'); return; }
   const ch=proj.chapters[i];
   const hasContent=!!ch.content;
@@ -1038,6 +1041,7 @@ function deleteCh(i,e){
 }
 
 function addChapter(){
+  if(isBusy()){ toast('⏳ 当前有进行中的任务，稍后再添加章节'); return; }
   const n=proj.chapters.length+1;
   proj.chapters.push(newCh(n)); proj.chTotal=proj.chapters.length;
   save(); renderChapters(); toast(`➕ 已添加第${n}章`);
@@ -1330,6 +1334,7 @@ function normalizePatchText(s){
 function saveChapter(){
   const activeId=getActiveChapterId();
   if(activeId&&proj.chapters[currentChIdx]?.id===activeId){ toast('⏳ 本章正在生成/修改中，暂不能确认'); return; }
+  if(isBusy()){ toast('⏳ 正在生成/修改中，暂不能确认本章'); return; }
   const ch=proj.chapters[currentChIdx];
   ch.content=document.getElementById('writeOutput').value;
   refreshChapterSummary(ch);
@@ -1377,6 +1382,7 @@ function renderStats(){
 }
 
 function goWriteCh(id){
+  if(isBusy()){ toast('⏳ 当前有进行中的任务，请等待完成后再切换章节'); return; }
   const i=proj.chapters.findIndex(c=>c.id===id);
   if(i>=0){ currentChIdx=i; nav('write'); }
 }
