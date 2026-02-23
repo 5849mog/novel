@@ -1087,7 +1087,7 @@ function renderChapters(){
       </div>
       <div class="ch-actions">
         ${ch.status!=='todo'?`<button class="btn-sm" onclick="editChTitle(${i},event)">✏️ 改标题</button>`:''}
-        ${ch.content?`<button class="btn-sm ok" onclick="copyChById(${ch.id},event)">📋 复制</button>`:''}
+        ${ch.content?`<button class="btn-sm ok" onclick='copyChById(${JSON.stringify(ch.id)},event)'>📋 复制</button>`:''}
         ${ch.status==='done'?`<button class="btn-sm" onclick="resetCh(${i},event)">↩ 重写</button>`:''}
         <button class="btn-sm danger" onclick="deleteCh(${i},event)">🗑️ 删除</button>
       </div>
