@@ -667,8 +667,12 @@ let isGenerating = false;
 let isRevising   = false;
 let draftSaveTimer = null;
 let draftStatusTimer = null;
+let persistTimer = null;
+let keyboardFocusTimer = null;
 let activeGenChapterId = null;
 let activeRevChapterId = null;
+const cleanupTasks=[];
+const SAVE_DEBOUNCE_MS=220;
 
 function clampInt(v, fallback, min, max){
   const n=Number.parseInt(v,10);
@@ -701,6 +705,7 @@ function sanitizeProject(raw){
       num:i+1,
       title:typeof c?.title==='string'&&c.title.trim()?c.title.trim():`第${i+1}章`,
       outline:typeof c?.outline==='string'?c.outline:'',
+      extra:typeof c?.extra==='string'?c.extra:'',
       content:typeof c?.content==='string'?c.content:'',
       ctxSummary:typeof c?.ctxSummary==='string'?c.ctxSummary:'',
       revisions:Array.isArray(c?.revisions)?c.revisions:[],
@@ -740,9 +745,22 @@ const INT_SHORT_DESC = [
     if(s) sanitizeProject(JSON.parse(s));
   } catch(e){}
   updateAppHeight();
-  window.addEventListener('resize',updateAppHeight);
-  window.addEventListener('orientationchange',updateAppHeight);
+  addDisposableEvent(window,'resize',updateAppHeight,{passive:true});
+  addDisposableEvent(window,'orientationchange',updateAppHeight,{passive:true});
+  if(window.visualViewport){
+    addDisposableEvent(window.visualViewport,'resize',updateAppHeight,{passive:true});
+    addDisposableEvent(window.visualViewport,'scroll',updateAppHeight,{passive:true});
+  }
+  addDisposableEvent(window,'unhandledrejection',(e)=>{
+    console.error('Unhandled Promise rejection:',e?.reason||e);
+    toast('⚠️ 出现未处理的异步错误，请重试');
+  });
+  addDisposableEvent(window,'pagehide',cleanupAll,{once:true});
+  addDisposableEvent(document,'visibilitychange',()=>{
+    if(document.visibilityState==='hidden') flushSave();
+  });
   bindNativeTouchFeedback();
+  bindMobileKeyboardGuard();
   updateProviderBadge();
   syncSetupForm();
   loadCfgForm();
@@ -750,7 +768,25 @@ const INT_SHORT_DESC = [
 })();
 
 function updateAppHeight(){
-  document.documentElement.style.setProperty('--app-height',`${window.innerHeight}px`);
+  const h=window.visualViewport?.height||window.innerHeight;
+  document.documentElement.style.setProperty('--app-height',`${Math.round(h)}px`);
+}
+
+function addDisposableEvent(target,type,handler,options){
+  if(!target||!handler) return;
+  target.addEventListener(type,handler,options);
+  cleanupTasks.push(()=>target.removeEventListener(type,handler,options));
+}
+
+function cleanupAll(){
+  flushSave();
+  clearTimeout(draftSaveTimer);
+  clearTimeout(draftStatusTimer);
+  clearTimeout(keyboardFocusTimer);
+  while(cleanupTasks.length){
+    const task=cleanupTasks.pop();
+    try{ task&&task(); }catch(e){}
+  }
 }
 
 function pulseHaptic(ms=12){
@@ -758,13 +794,30 @@ function pulseHaptic(ms=12){
 }
 
 function bindNativeTouchFeedback(){
-  document.addEventListener('click',(e)=>{
+  addDisposableEvent(document,'click',(e)=>{
     const hit=e.target.closest('.bnav-item,.btn-primary,.btn-sm,.toggle-row,.hdr-btn,.ch-head');
     if(hit) pulseHaptic(8);
   },{passive:true});
 }
 
-function save(){
+function bindMobileKeyboardGuard(){
+  const keepFocusedInputVisible=(target)=>{
+    clearTimeout(keyboardFocusTimer);
+    keyboardFocusTimer=setTimeout(()=>{
+      if(typeof target?.scrollIntoView==='function'){
+        target.scrollIntoView({block:'center',behavior:'smooth'});
+      }
+    },120);
+  };
+
+  addDisposableEvent(document,'focusin',(e)=>{
+    const t=e.target;
+    if(!(t instanceof HTMLInputElement||t instanceof HTMLTextAreaElement)) return;
+    keepFocusedInputVisible(t);
+  });
+}
+
+function persistState(){
   try{
     const cfgSnapshot={...cfg};
     delete cfgSnapshot.apiKeys;
@@ -772,6 +825,25 @@ function save(){
     localStorage.setItem(PROJ_KEY, JSON.stringify(proj));
     persistApiKeys();
   } catch(e){ toast('⚠️ 存储失败（可能是无痕模式限制）'); }
+}
+
+function flushSave(){
+  clearTimeout(persistTimer);
+  persistTimer=null;
+  persistState();
+}
+
+function save(opts={}){
+  const immediate=!!opts.immediate;
+  clearTimeout(persistTimer);
+  if(immediate){
+    persistState();
+    return;
+  }
+  persistTimer=setTimeout(()=>{
+    persistTimer=null;
+    persistState();
+  },SAVE_DEBOUNCE_MS);
 }
 
 function loadApiKeys(){
@@ -866,11 +938,11 @@ function initWriteInteractions(){
     queueDraftSave();
   };
 
-  if(outline) outline.addEventListener('input',onMetaInput);
-  if(extra) extra.addEventListener('input',onMetaInput);
+  if(outline) addDisposableEvent(outline,'input',onMetaInput);
+  if(extra) addDisposableEvent(extra,'input',onMetaInput);
 
   if(revInput){
-    revInput.addEventListener('keydown',(e)=>{
+    addDisposableEvent(revInput,'keydown',(e)=>{
       if(e.key==='Enter'&&!e.shiftKey){
         e.preventDefault();
         doRevision();
@@ -878,7 +950,7 @@ function initWriteInteractions(){
     });
   }
 
-  document.addEventListener('keydown',(e)=>{
+  addDisposableEvent(document,'keydown',(e)=>{
     if(!document.getElementById('page-write')?.classList.contains('active')) return;
     const mod=e.ctrlKey||e.metaKey;
     if(!mod) return;
@@ -912,7 +984,7 @@ function queueDraftSave(){
   clearTimeout(draftSaveTimer);
   clearTimeout(draftStatusTimer);
   draftSaveTimer=setTimeout(()=>{
-    save();
+    save({immediate:true});
     setDraftStatus('✓ 已自动保存','#3d9970');
     draftStatusTimer=setTimeout(()=>setDraftStatus('草稿会自动保存到本地'),1200);
   },350);
@@ -1549,7 +1621,7 @@ function onProviderChange(){
 
   if(!isCustom){
     const models=MC[p]?.models||[];
-    document.getElementById('cfgModel').innerHTML=models.map(m=>`<option value="${m}">${m}</option>`).join('');
+    document.getElementById('cfgModel').innerHTML=models.map(m=>`<option value="${XA(m)}">${X(m)}</option>`).join('');
     // 恢复已保存的模型选择
     if(cfg.provider===p && cfg.model) document.getElementById('cfgModel').value=cfg.model;
   } else {
@@ -1940,6 +2012,7 @@ function manualPrompt(text){
 
 // ─── UTILS ───
 function X(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function XA(s){ return X(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 let _tt;
 function toast(msg){ clearTimeout(_tt); const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); _tt=setTimeout(()=>el.classList.remove('show'),2800); }
 </script>
