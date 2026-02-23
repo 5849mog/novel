@@ -691,7 +691,7 @@ function createChapterId(){
 }
 
 function sanitizeProject(raw){
-  if(!raw||typeof raw!=='object') return;
+  if(!raw||typeof raw!=='object') return proj;
   proj.title=typeof raw.title==='string'?raw.title:proj.title;
   proj.genre=typeof raw.genre==='string'?raw.genre:proj.genre;
   proj.style=typeof raw.style==='string'?raw.style:proj.style;
@@ -719,6 +719,7 @@ function sanitizeProject(raw){
     }));
     proj.chTotal=proj.chapters.length||proj.chTotal;
   }
+  return proj;
 }
 
 // ─── 强度档位说明（必须在 boot() 之前定义）───
@@ -1616,9 +1617,8 @@ async function importProjectBackup(event){
       throw new Error('备份文件格式不正确');
     }
 
-    const next=sanitizeProject(parsed.project);
+    sanitizeProject(parsed.project);
 
-    proj=next;
     currentChIdx=-1;
     save({immediate:true});
     syncSetupForm();
