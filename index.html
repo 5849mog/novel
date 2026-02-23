@@ -434,6 +434,11 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   <div style="height:8px"></div>
   <button class="btn-sm" onclick="exportMd()" style="width:100%;justify-content:center;padding:13px;font-size:13px;">🧾 导出全文 (.md 文件)</button>
   <div style="height:8px"></div>
+  <button class="btn-sm" onclick="exportProjectBackup()" style="width:100%;justify-content:center;padding:13px;font-size:13px;">🗃️ 导出工程备份 (.json)</button>
+  <div style="height:8px"></div>
+  <button class="btn-sm" onclick="triggerImportProjectBackup()" style="width:100%;justify-content:center;padding:13px;font-size:13px;">📥 导入工程备份 (.json)</button>
+  <input type="file" id="projectImportInput" accept="application/json,.json" style="display:none" onchange="importProjectBackup(event)">
+  <div style="height:8px"></div>
   <button class="btn-sm danger" onclick="clearProject()" style="width:100%;justify-content:center;padding:13px;font-size:13px;">🗑️ 清除项目数据</button>
 </div>
 
@@ -686,7 +691,7 @@ function createChapterId(){
 }
 
 function sanitizeProject(raw){
-  if(!raw||typeof raw!=='object') return;
+  if(!raw||typeof raw!=='object') return proj;
   proj.title=typeof raw.title==='string'?raw.title:proj.title;
   proj.genre=typeof raw.genre==='string'?raw.genre:proj.genre;
   proj.style=typeof raw.style==='string'?raw.style:proj.style;
@@ -714,6 +719,7 @@ function sanitizeProject(raw){
     }));
     proj.chTotal=proj.chapters.length||proj.chTotal;
   }
+  return proj;
 }
 
 // ─── 强度档位说明（必须在 boot() 之前定义）───
@@ -1578,6 +1584,54 @@ function exportMd(){
   const full=buildExportText('md');
   const fn=(proj.title||'小说')+'.md';
   exportTextFile(full, fn);
+}
+
+function exportProjectBackup(){
+  const payload={
+    app:'moyuan-studio',
+    version:1,
+    exportedAt:new Date().toISOString(),
+    project:proj
+  };
+  const name=(proj.title||'小说')+'_工程备份.json';
+  exportTextFile(JSON.stringify(payload,null,2),name);
+}
+
+function triggerImportProjectBackup(){
+  if(isBusy()){ toast('⏳ 当前有进行中的任务，暂不可导入'); return; }
+  const el=document.getElementById('projectImportInput');
+  if(!el){ toast('❌ 导入控件初始化失败'); return; }
+  el.value='';
+  el.click();
+}
+
+async function importProjectBackup(event){
+  const input=event?.target;
+  const file=input?.files?.[0];
+  if(!file) return;
+
+  try{
+    const raw=await file.text();
+    const parsed=JSON.parse(raw);
+    if(!parsed||typeof parsed!=='object'||!parsed.project){
+      throw new Error('备份文件格式不正确');
+    }
+
+    sanitizeProject(parsed.project);
+
+    currentChIdx=-1;
+    save({immediate:true});
+    syncSetupForm();
+    renderChapters();
+    renderWrite();
+    renderStats();
+    nav('chapters');
+    toast(`✅ 已导入 ${file.name}`);
+  } catch(err){
+    toast('❌ 导入失败：'+(err.message||'文件解析失败'));
+  } finally {
+    if(input) input.value='';
+  }
 }
 
 function clearProject(){
