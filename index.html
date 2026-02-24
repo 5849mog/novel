@@ -1094,6 +1094,7 @@ function renderChapters(){
       <div class="ch-actions">
         ${ch.status!=='todo'?`<button class="btn-sm" onclick="editChTitle(${i},event)">✏️ 改标题</button>`:''}
         ${ch.content?`<button class="btn-sm ok" onclick='copyChById(${JSON.stringify(ch.id)},event)'>📋 复制</button>`:''}
+        <button class="btn-sm" onclick="duplicateCh(${i},event)">🧬 复制章</button>
         ${ch.status==='done'?`<button class="btn-sm" onclick="resetCh(${i},event)">↩ 重写</button>`:''}
         <button class="btn-sm danger" onclick="deleteCh(${i},event)">🗑️ 删除</button>
       </div>
@@ -1125,6 +1126,30 @@ function resetCh(i,e){
   if(!confirm('确认重置本章？内容和修改记录将被清空。')) return;
   Object.assign(proj.chapters[i],{content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'});
   save(); renderChapters(); toast('↩ 已重置');
+}
+
+function duplicateCh(i,e){
+  e.stopPropagation();
+  if(isBusy()){ toast('⏳ 当前有进行中的任务，暂不可复制章节'); return; }
+  const src=proj.chapters[i];
+  if(!src){ toast('⚠️ 未找到要复制的章节'); return; }
+
+  const cloned={
+    ...src,
+    id:createChapterId(),
+    num:i+2,
+    title:src.title.includes('（副本）')?src.title:`${src.title}（副本）`,
+    revisions:Array.isArray(src.revisions)
+      ?src.revisions.map(r=>({ ...r }))
+      :[]
+  };
+  proj.chapters.splice(i+1,0,cloned);
+  proj.chapters.forEach((c,idx)=>{ c.num=idx+1; });
+  proj.chTotal=proj.chapters.length;
+  if(currentChIdx>i) currentChIdx++;
+
+  save(); renderChapters();
+  toast(`🧬 已复制第${i+1}章为第${i+2}章`);
 }
 
 function deleteCh(i,e){
