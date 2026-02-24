@@ -235,6 +235,36 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important;scroll-behavior:auto!important;}
 }
+
+/* ─── 5-TAB NAV ─── */
+.bnav{ grid-template-columns:repeat(5,1fr); }
+
+/* ─── CHAR CARDS ─── */
+.char-card{ background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);margin-bottom:10px;overflow:hidden;transition:border-color .2s; }
+.char-card:hover{ border-color:var(--b2); }
+.char-card.role-主角,.char-card.role-男主,.char-card.role-女主{ border-color:rgba(200,164,74,.35); }
+.char-card.role-反派{ border-color:rgba(196,40,64,.35); }
+.char-head{ padding:14px 15px 10px;display:flex;align-items:flex-start;gap:12px; }
+.char-avatar{ width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:var(--s4);border:1px solid var(--b2); }
+.char-card.role-主角 .char-avatar,.char-card.role-男主 .char-avatar,.char-card.role-女主 .char-avatar{ background:rgba(200,164,74,.12);border-color:rgba(200,164,74,.3); }
+.char-card.role-反派 .char-avatar{ background:rgba(196,40,64,.12);border-color:rgba(196,40,64,.3); }
+.char-info{ flex:1;min-width:0; }
+.char-name{ font-size:15px;font-weight:700;color:var(--t1);font-family:'Noto Serif SC',serif; }
+.char-role-badge{ display:inline-block;font-size:10px;padding:1px 7px;border-radius:8px;font-weight:600;margin-left:7px;background:var(--s4);color:var(--t3); }
+.char-card.role-主角 .char-role-badge,.char-card.role-男主 .char-role-badge,.char-card.role-女主 .char-role-badge{ background:rgba(200,164,74,.15);color:var(--gold2); }
+.char-card.role-反派 .char-role-badge{ background:var(--red3);color:#ff7090; }
+.char-meta{ font-size:12px;color:var(--t3);margin-top:4px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; }
+.char-actions{ display:flex;gap:7px;padding:0 15px 13px; }
+
+/* ─── OUTLINE CARDS ─── */
+.ol-card{ background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);margin-bottom:10px;padding:14px 15px; }
+.ol-card-head{ display:flex;align-items:center;gap:10px;margin-bottom:10px; }
+.ol-num{ width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;background:rgba(200,164,74,.15);color:var(--gold2); }
+.ol-title-input{ flex:1;background:var(--s3);border:1px solid var(--b1);border-radius:8px;padding:6px 10px;color:var(--t1);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none; }
+.ol-title-input:focus{ border-color:var(--b2); }
+.ol-body-input{ width:100%;background:var(--s3);border:1px solid var(--b1);border-radius:8px;padding:9px 11px;color:var(--t2);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;resize:none;line-height:1.7; }
+.ol-body-input:focus{ border-color:var(--b2); }
+
 </style>
 </head>
 <body>
@@ -312,7 +342,10 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="sw" id="qjSw"></div>
   </div>
 
-  <div class="sec-hdr">👤 角色设定</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:22px 0 12px;">
+    <div class="sec-hdr" style="margin:0">👤 角色设定</div>
+    <button class="btn-sm" id="aiGenCharBtn" onclick="aiGenCharsFromSetup()" style="gap:5px;flex-shrink:0;">✦ AI 生成角色卡</button>
+  </div>
   <div class="card">
     <div class="frow"><label class="flabel">主角</label><input class="finput" id="charMain" placeholder="姓名、性格、外貌特征…"></div>
     <div class="frow"><label class="flabel">配角 / 对手</label><input class="finput" id="charSub" placeholder="姓名及关系…"></div>
@@ -352,13 +385,14 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="frow" style="margin-bottom:8px;">
       <input class="finput" id="chSearchInput" placeholder="搜索章节标题或内容关键词…">
     </div>
-    <div class="frow" style="margin-bottom:0;">
-      <select class="fselect" id="chStatusFilter">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select class="fselect" id="chStatusFilter" style="flex:1">
         <option value="all" selected>全部状态</option>
         <option value="todo">仅待创作</option>
         <option value="writing">仅创作中</option>
         <option value="done">仅已完成</option>
       </select>
+      <button class="btn-sm" onclick="nav('outline')" style="flex-shrink:0;white-space:nowrap;">🗺️ 生成大纲</button>
     </div>
   </div>
   <div id="chapterList"></div>
@@ -455,6 +489,123 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   <button class="btn-sm danger" onclick="clearProject()" style="width:100%;justify-content:center;padding:13px;font-size:13px;">🗑️ 清除项目数据</button>
 </div>
 
+<!-- ═══ CHARS PAGE ═══ -->
+<div class="page" id="page-chars">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+    <div class="sec-hdr" style="margin:0">👤 角色卡</div>
+    <button class="btn-sm" onclick="openCharModal(-1)" style="gap:5px;">＋ 新建角色</button>
+  </div>
+  <div class="fhint" style="margin-bottom:16px;margin-top:4px;">角色信息会自动注入每章生成 Prompt，让 AI 始终记住人物设定</div>
+  <div id="charList"></div>
+  <div id="charEmpty" style="display:none">
+    <div class="empty"><div class="empty-icon">🎭</div><div class="empty-text">还没有角色卡<br>点击右上角「＋ 新建角色」开始</div></div>
+  </div>
+</div>
+
+<!-- CHAR MODAL -->
+<div id="charModal" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);overflow-y:auto;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0);" onclick="if(event.target===this)closeCharModal()">
+  <div style="max-width:540px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;justify-content:flex-end;">
+    <div style="background:var(--s1);border-top:1px solid var(--b1);border-radius:20px 20px 0 0;padding:20px 18px 32px;flex-shrink:0;" onclick="event.stopPropagation()">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <span style="font-family:'Noto Serif SC',serif;font-size:16px;font-weight:700;color:var(--gold)" id="charModalTitle">新建角色</span>
+        <button class="btn-sm" onclick="closeCharModal()">✕ 关闭</button>
+      </div>
+      <div class="frow">
+        <label class="flabel">角色姓名 *</label>
+        <input class="finput" id="cm_name" placeholder="例如：林晚月">
+      </div>
+      <div class="frow-2">
+        <div class="frow" style="margin-bottom:0">
+          <label class="flabel">性别</label>
+          <select class="fselect" id="cm_gender">
+            <option value="">不指定</option>
+            <option value="男">男</option>
+            <option value="女">女</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
+        <div class="frow" style="margin-bottom:0">
+          <label class="flabel">角色身份</label>
+          <select class="fselect" id="cm_role">
+            <option value="主角">主角</option>
+            <option value="男主">男主</option>
+            <option value="女主">女主</option>
+            <option value="配角">配角</option>
+            <option value="反派">反派</option>
+            <option value="路人">路人</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow" style="margin-top:14px">
+        <label class="flabel">职业 / 身份背景</label>
+        <input class="finput" id="cm_job" placeholder="例如：医学院大四学生、冷漠总裁、江湖杀手…">
+      </div>
+      <div class="frow">
+        <label class="flabel">性格特点</label>
+        <textarea class="ftextarea" id="cm_personality" rows="2" placeholder="例如：外冷内热，刀子嘴豆腐心，遇事冷静但对她一人格外温柔…"></textarea>
+      </div>
+      <div class="frow">
+        <label class="flabel">外貌描述</label>
+        <textarea class="ftextarea" id="cm_appearance" rows="2" placeholder="例如：身材高挑，五官精致，常穿深色系，眼神清冷…"></textarea>
+      </div>
+      <div class="frow">
+        <label class="flabel">与主角的关系</label>
+        <input class="finput" id="cm_relation" placeholder="例如：青梅竹马、宿敌、前任、暗恋对象…">
+      </div>
+      <div class="frow" style="margin-bottom:0">
+        <label class="flabel">补充备注（秘密 / 过去 / 特殊设定）</label>
+        <textarea class="ftextarea" id="cm_note" rows="2" placeholder="例如：隐藏身份是组织内卧底，唯一弱点是对方的眼泪…"></textarea>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:18px;">
+        <button class="btn-primary btn-ghost" onclick="closeCharModal()" style="flex:1">取 消</button>
+        <button class="btn-primary" onclick="saveChar()" style="flex:2">💾 保 存 角 色</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ OUTLINE PAGE ═══ -->
+<div class="page" id="page-outline">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+    <button class="btn-sm" onclick="nav('chapters')" style="flex-shrink:0">← 返回章节</button>
+    <div class="sec-hdr" style="margin:0;flex:1">🗺️ 大纲生成</div>
+  </div>
+  <div class="card" style="margin-bottom:14px;">
+    <div style="font-size:13px;color:var(--t2);line-height:1.9;">
+      根据你的<b style="color:var(--t1)">故事梗概、类型和风格</b>，一键让 AI 规划全书每章大纲。生成后可逐章编辑，确认后写入章节列表。
+    </div>
+  </div>
+  <div class="card">
+    <div class="frow">
+      <label class="flabel">参考信息（只读预览）</label>
+      <div id="outlineRefInfo" style="font-size:12px;color:var(--t3);line-height:1.8;padding:10px 12px;background:var(--s3);border-radius:var(--r-sm);border:1px solid var(--b1);">请先在「创作设定」填写故事信息</div>
+    </div>
+    <div class="frow" style="margin-bottom:0">
+      <label class="flabel">补充创作方向（可选）</label>
+      <textarea class="ftextarea" id="outlineExtraHint" rows="2" placeholder="例如：第一幕要有反转，结局希望是HE，中段加入悬疑支线…"></textarea>
+    </div>
+  </div>
+  <button class="btn-primary" id="outlineGenBtn" onclick="generateOutline()" style="margin-bottom:14px;">
+    <div class="spinner" id="outlineSpinner"></div>
+    <span id="outlineGenLabel">✦ 一 键 生 成 全 书 大 纲</span>
+  </button>
+  <div id="outlineStreamArea" style="display:none">
+    <div class="sec-hdr" style="margin-top:0">⏳ AI 正在规划中…</div>
+    <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);padding:16px;font-family:'Noto Serif SC',serif;font-size:13px;color:var(--t2);line-height:1.9;min-height:120px;white-space:pre-wrap;word-break:break-all;" id="outlineStreamText"></div>
+  </div>
+  <div id="outlineResultArea" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div class="sec-hdr" style="margin:0">📋 大纲预览</div>
+      <div style="display:flex;gap:7px;">
+        <button class="btn-sm" onclick="regenOutline()">🔄 重新生成</button>
+        <button class="btn-sm ok" onclick="applyOutline()">✅ 写入章节</button>
+      </div>
+    </div>
+    <div class="fhint" style="margin-bottom:10px;">可以直接编辑下方各章大纲，满意后点击「写入章节」</div>
+    <div id="outlineCards"></div>
+  </div>
+</div>
+
 <!-- ═══ SETTINGS PAGE ═══ -->
 <div class="page" id="page-settings">
   <div class="sec-hdr">⚡ API 配置</div>
@@ -542,7 +693,8 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 
 <!-- BOTTOM NAV -->
 <nav class="bnav">
-  <button class="bnav-item active" id="bnav-setup" onclick="nav('setup')"><span class="bnav-icon">⚙️</span><span class="bnav-label">创作设定</span></button>
+  <button class="bnav-item active" id="bnav-setup" onclick="nav('setup')"><span class="bnav-icon">⚙️</span><span class="bnav-label">设定</span></button>
+  <button class="bnav-item" id="bnav-chars" onclick="nav('chars')"><span class="bnav-icon">👤</span><span class="bnav-label">角色</span></button>
   <button class="bnav-item" id="bnav-chapters" onclick="nav('chapters')"><span class="bnav-icon">📖</span><span class="bnav-label">章节</span></button>
   <button class="bnav-item" id="bnav-write" onclick="nav('write')"><span class="bnav-icon">✍️</span><span class="bnav-label">写作台</span></button>
   <button class="bnav-item" id="bnav-stats" onclick="nav('stats')"><span class="bnav-icon">📊</span><span class="bnav-label">存档</span></button>
@@ -679,7 +831,7 @@ const STYLE_DESC = {
 
 // ─── STATE ───
 let cfg = { provider:'deepseek', model:'deepseek-chat', apiKeys:{deepseek:'',openai:'',claude:'',custom:''}, customEndpoint:'', maxTokens:4096, temperature:1.0, streaming:true, rememberKeys:false };
-let proj = { title:'', genre:'romance', style:'literary', intensity:3, qujia:false, charMain:'', charSub:'', worldBg:'', plotCore:'', chTotal:10, chWords:1500, chapters:[] };
+let proj = { title:'', genre:'romance', style:'literary', intensity:3, qujia:false, charMain:'', charSub:'', worldBg:'', plotCore:'', chTotal:10, chWords:1500, chapters:[], characters:[] };
 let currentChIdx = -1;
 let chapterFilter={ keyword:'', status:'all' };
 let isGenerating = false;
@@ -717,6 +869,9 @@ function sanitizeProject(raw){
   proj.plotCore=typeof raw.plotCore==='string'?raw.plotCore:proj.plotCore;
   proj.chTotal=clampInt(raw.chTotal,proj.chTotal,1,50);
   proj.chWords=clampInt(raw.chWords,proj.chWords,800,3000);
+
+  // characters field (new feature, backward compatible)
+  proj.characters = Array.isArray(raw.characters) ? raw.characters : (proj.characters || []);
 
   if(Array.isArray(raw.chapters)){
     proj.chapters=raw.chapters.map((c,i)=>({
@@ -900,7 +1055,7 @@ function getChapterById(id){
 }
 
 function isBusy(){
-  return isGenerating||isRevising;
+  return isGenerating||isRevising||(typeof isGeneratingOutline!=="undefined"&&isGeneratingOutline)||(typeof isGenningChars!=="undefined"&&isGenningChars);
 }
 
 function updateOpStatus(){
@@ -930,6 +1085,9 @@ function syncWriteLocks(){
 
 // ─── NAV ───
 function nav(p){
+  // 切换页面时强制关闭角色卡弹窗，防止 body.overflow 卡住
+  const charModal=document.getElementById('charModal');
+  if(charModal&&charModal.style.display!=='none'){ closeCharModal(); }
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active','entering'));
   document.querySelectorAll('.bnav-item').forEach(el=>el.classList.remove('active'));
   const pageEl=document.getElementById('page-'+p);
@@ -943,6 +1101,8 @@ function nav(p){
   if(p==='write')    renderWrite();
   if(p==='stats')    renderStats();
   if(p==='settings') loadCfgForm();
+  if(p==='chars')    { renderChars(); }
+  if(p==='outline')  { renderOutlineRefInfo(); }
   pageEl.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -1186,8 +1346,8 @@ function loadDemo(){
   const idx=Number.parseInt(pick,10)-1;
   if(Number.isNaN(idx)||idx<0||idx>=DEMO_PROJECTS.length){ toast('⚠️ 编号无效，已取消加载'); return; }
   const demo=DEMO_PROJECTS[idx];
-  proj={...demo, chapters:Array.from({length:demo.chTotal},(_,i)=>newCh(i+1))};
-  save(); syncSetupForm(); toast(`📖 已加载演示：${demo.title}`); nav('chapters');
+  proj={...demo, chapters:Array.from({length:demo.chTotal},(_,i)=>newCh(i+1)), characters:[]};
+  save(); syncSetupForm(); renderChars(); toast(`📖 已加载演示：${demo.title}`); nav('chapters');
 }
 
 function newCh(num){ return {id:createChapterId(),num,title:`第${num}章`,outline:'',content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'}; }
@@ -1760,7 +1920,7 @@ function exportMd(){
 function exportProjectBackup(){
   const payload={
     app:'moyuan-studio',
-    version:1,
+    version:2,
     exportedAt:new Date().toISOString(),
     project:proj
   };
@@ -1791,9 +1951,11 @@ async function importProjectBackup(event){
     sanitizeProject(parsed.project);
 
     currentChIdx=-1;
+    resetOutlineDraft();
     save({immediate:true});
     syncSetupForm();
     renderChapters();
+    renderChars();
     renderWrite();
     renderStats();
     nav('chapters');
@@ -1808,12 +1970,15 @@ async function importProjectBackup(event){
 function clearProject(){
   if(isBusy()){ toast('⏳ 当前有进行中的任务，暂不可清除项目'); return; }
   if(!confirm('确认清除所有项目数据？此操作不可撤销。')) return;
-  proj={title:'',genre:'romance',style:'literary',intensity:3,qujia:false,charMain:'',charSub:'',worldBg:'',plotCore:'',chTotal:10,chWords:1500,chapters:[]};
+  proj={title:'',genre:'romance',style:'literary',intensity:3,qujia:false,charMain:'',charSub:'',worldBg:'',plotCore:'',chTotal:10,chWords:1500,chapters:[],characters:[]};
   currentChIdx=-1;
   save();
+  // 清空大纲草稿状态
+  resetOutlineDraft();
   // 强制刷新所有页面的显示状态
   syncSetupForm();
   renderChapters();
+  renderChars();
   renderWrite();
   renderStats();
   toast('🗑️ 已清除');
@@ -2043,7 +2208,7 @@ function buildSys(){
 配角：${proj.charSub||'未指定'}
 世界背景：${proj.worldBg||'未指定'}
 核心剧情：${proj.plotCore}
-全书共${proj.chTotal}章，每章目标约${proj.chWords}字
+全书共${proj.chTotal}章，每章目标约${proj.chWords}字${buildCharBlock()}
 
 ${buildIntDirective(proj.intensity, proj.genre)}
 
@@ -2234,6 +2399,522 @@ function manualPrompt(text){
     window.prompt('请手动全选并复制：',text.length>500?text.slice(0,500)+'…':text);
   } catch(e){ toast('⚠️ 复制失败，请手动长按文本'); }
 }
+
+// ═══════════════════════════════════════
+// ─── CHAR MODULE ───
+// ═══════════════════════════════════════
+
+let editingCharIdx = -1; // -1 = new
+
+function renderChars() {
+  const chars = proj.characters || [];
+  const list = document.getElementById('charList');
+  const empty = document.getElementById('charEmpty');
+  if (!list) return;
+
+  if (!chars.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  const ROLE_EMOJI = { '主角':'🌟','男主':'💠','女主':'💎','配角':'👥','反派':'⚔️','路人':'🚶' };
+
+  list.innerHTML = chars.map((c, i) => {
+    const emoji = ROLE_EMOJI[c.role] || '👤';
+    const metaParts = [];
+    if (c.gender) metaParts.push(c.gender);
+    if (c.job) metaParts.push(c.job);
+    if (c.personality) metaParts.push(c.personality);
+    if (c.relation) metaParts.push('关系：' + c.relation);
+    return `<div class="char-card role-${X(c.role||'')}">
+      <div class="char-head">
+        <div class="char-avatar">${emoji}</div>
+        <div class="char-info">
+          <div><span class="char-name">${X(c.name)}</span><span class="char-role-badge">${X(c.role||'未定')}</span></div>
+          <div class="char-meta">${X(metaParts.filter(Boolean).join(' · '))}</div>
+        </div>
+      </div>
+      <div class="char-actions">
+        <button class="btn-sm" onclick="openCharModal(${i})">✏️ 编辑</button>
+        <button class="btn-sm danger" onclick="deleteChar(${i})">🗑️ 删除</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openCharModal(idx) {
+  editingCharIdx = idx;
+  const modal = document.getElementById('charModal');
+  const title = document.getElementById('charModalTitle');
+  if (!modal) return;
+
+  if (idx === -1) {
+    // New char — clear form
+    title.textContent = '新建角色';
+    document.getElementById('cm_name').value = '';
+    document.getElementById('cm_gender').value = '';
+    document.getElementById('cm_role').value = '配角';
+    document.getElementById('cm_job').value = '';
+    document.getElementById('cm_personality').value = '';
+    document.getElementById('cm_appearance').value = '';
+    document.getElementById('cm_relation').value = '';
+    document.getElementById('cm_note').value = '';
+  } else {
+    const c = (proj.characters || [])[idx];
+    if (!c) return;
+    title.textContent = '编辑角色';
+    document.getElementById('cm_name').value = c.name || '';
+    document.getElementById('cm_gender').value = c.gender || '';
+    document.getElementById('cm_role').value = c.role || '配角';
+    document.getElementById('cm_job').value = c.job || '';
+    document.getElementById('cm_personality').value = c.personality || '';
+    document.getElementById('cm_appearance').value = c.appearance || '';
+    document.getElementById('cm_relation').value = c.relation || '';
+    document.getElementById('cm_note').value = c.note || '';
+  }
+
+  modal.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('cm_name').focus(), 100);
+}
+
+function closeCharModal() {
+  const modal = document.getElementById('charModal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function saveChar() {
+  const name = document.getElementById('cm_name').value.trim();
+  if (!name) { toast('⚠️ 请填写角色姓名'); return; }
+
+  // 清理 AI 可能生成的"说明性占位"文字，保留真实内容或置空
+  const cleanField = v => {
+    const s = (v || '').trim();
+    if (!s) return '';
+    // 如果整段都是"无xxx""暂无xxx""正文中xxx"这类说明，直接丢弃
+    if (/^(正文中|暂无|无相关|未提及|没有|不详|未知|无描写|无信息|无具体)/.test(s)) return '';
+    return s;
+  };
+
+  const char = {
+    name,
+    gender: document.getElementById('cm_gender').value,
+    role: document.getElementById('cm_role').value,
+    job: cleanField(document.getElementById('cm_job').value),
+    personality: cleanField(document.getElementById('cm_personality').value),
+    appearance: cleanField(document.getElementById('cm_appearance').value),
+    relation: cleanField(document.getElementById('cm_relation').value),
+    note: cleanField(document.getElementById('cm_note').value),
+  };
+
+  if (!proj.characters) proj.characters = [];
+
+  if (editingCharIdx === -1) {
+    proj.characters.push(char);
+    toast(`✅ 已添加角色「${name}」`);
+  } else {
+    proj.characters[editingCharIdx] = char;
+    toast(`✅ 已更新角色「${name}」`);
+  }
+
+  save();
+  renderChars();
+  closeCharModal();
+}
+
+function deleteChar(idx) {
+  const chars = proj.characters || [];
+  const c = chars[idx];
+  if (!c) return;
+  if (!confirm(`确认删除角色「${c.name}」？`)) return;
+  chars.splice(idx, 1);
+  save();
+  renderChars();
+  toast(`🗑️ 已删除角色「${c.name}」`);
+}
+
+// Build character block for injection into prompts
+function buildCharBlock() {
+  const chars = proj.characters || [];
+  if (!chars.length) return '';
+  const lines = chars.map(c => {
+    const parts = [];
+    if (c.gender) parts.push(c.gender);
+    if (c.job) parts.push(c.job);
+    if (c.personality) parts.push('性格：' + c.personality);
+    if (c.appearance) parts.push('外貌：' + c.appearance);
+    if (c.relation) parts.push('关系：' + c.relation);
+    if (c.note) parts.push('备注：' + c.note);
+    return `【${c.role || '角色'}】${c.name}　${parts.join('，')}`;
+  });
+  return '\n\n【人物设定】\n' + lines.join('\n');
+}
+
+// ─── resetOutlineDraft ───
+function resetOutlineDraft() {
+  outlineDraft = [];
+  const resultArea = document.getElementById('outlineResultArea');
+  const streamArea = document.getElementById('outlineStreamArea');
+  const extraHint  = document.getElementById('outlineExtraHint');
+  if (resultArea) resultArea.style.display = 'none';
+  if (streamArea) streamArea.style.display = 'none';
+  if (extraHint)  extraHint.value = '';
+  renderOutlineRefInfo();
+}
+
+// ─── AI 从「角色设定」一键生成角色卡 ───
+let isGenningChars = false;
+
+async function aiGenCharsFromSetup() {
+  if (isGenningChars) { toast('⏳ 正在生成，请稍候'); return; }
+  const apiKey = cfg.apiKeys[cfg.provider];
+  if (!apiKey) { toast('⚠️ 请先在「设置」配置 API Key'); nav('settings'); return; }
+
+  const charMain = (document.getElementById('charMain')?.value || proj.charMain || '').trim();
+  const charSub  = (document.getElementById('charSub')?.value  || proj.charSub  || '').trim();
+  const genre    = proj.genre  || 'romance';
+  const plotCore = (document.getElementById('plotCore')?.value || proj.plotCore || '').trim();
+  const worldBg  = (document.getElementById('worldBg')?.value  || proj.worldBg  || '').trim();
+  const title    = (document.getElementById('novelTitle')?.value || proj.title || '').trim();
+
+  // ── 收集已写章节内容作为人物识别来源 ──
+  // 策略：覆盖所有章节优先，按章节数自动分配每章配额
+  // 每章取开头 + 结尾各一段，捕捉章首出场和章末新增人物
+  // 总上限 18000 字（约 6000 token，主流模型均可承受）
+  const TOTAL_LIMIT = 18000;
+  const writtenChs = (proj.chapters || []).filter(c => c.content && c.content.trim());
+  let chapterExcerpts = '';
+  if (writtenChs.length) {
+    // 每章分配字数：平均分配，最少200字，最多800字
+    const perCh = Math.min(800, Math.max(200, Math.floor(TOTAL_LIMIT / writtenChs.length)));
+    const headLen = Math.ceil(perCh * 0.6);  // 60% 取开头（人物出场）
+    const tailLen = Math.floor(perCh * 0.4); // 40% 取结尾（新人物/关系变化）
+    const parts = writtenChs.map(ch => {
+      const body = ch.content;
+      const head = body.slice(0, headLen);
+      // 结尾段：只有内容够长才加，避免和开头重复
+      const tail = body.length > headLen + tailLen
+        ? '……' + body.slice(-tailLen)
+        : '';
+      return `【${ch.title}】\n${head}${tail}`;
+    });
+    chapterExcerpts = parts.join('\n\n');
+  }
+
+  const hasContent = !!chapterExcerpts;
+
+  const btn = document.getElementById('aiGenCharBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '✦ 生成中…'; }
+  isGenningChars = true;
+
+  const sys = `你是专业的中文网络小说人物分析师，擅长${GENRE_DESC[genre]||genre}类型。你的任务是从提供的材料中提炼角色卡，严格不得虚构材料中未出现的人物。`;
+
+  const hints = [];
+  if (title)    hints.push('书名：' + title);
+  if (charMain) hints.push('主角设定：' + charMain);
+  if (charSub)  hints.push('配角设定：' + charSub);
+  if (plotCore) hints.push('核心剧情：' + plotCore);
+  if (worldBg)  hints.push('世界背景：' + worldBg);
+
+  let user;
+  if (hasContent) {
+    // 有正文：以正文为准，设定字段作为补充
+    user = `请根据以下【已写正文片段】，为这部小说提炼并生成角色卡。
+
+【已写正文片段（共${writtenChs.length}章节选）】
+${chapterExcerpts}
+
+${hints.length ? '【创作设定参考】\n' + hints.join('\n') : ''}
+
+【核心要求】
+1. 只为正文中实际出现、有名字或明显身份的人物生成角色卡，不得添加正文里完全没有出现的人物
+2. 各字段填写原则：
+   - 有直接描写 → 直接提炼原文
+   - 无直接描写但能从言行/反应/他人评价中推断 → 写出推断结果（自然表述，不加"推测"字样）
+   - 完全没有任何线索 → 留空字符串 ""，不要写"无描写""未提及"等说明文字
+3. 每个角色尽量把已知信息写丰满，宁可多写合理推断，不要大量空字段
+4. 生成 2~4 个主要角色（以戏份多少排序，主角优先）
+5. 严格按以下 JSON 数组格式输出，不要任何多余文字、注释或 markdown：
+
+[
+  {
+    "name": "姓名",
+    "gender": "男/女/其他",
+    "role": "主角/男主/女主/配角/反派",
+    "job": "职业或身份背景（从正文或言行推断）",
+    "personality": "性格特点（从言行举止推断，1-2句）",
+    "appearance": "外貌描述（有描写则写，无任何线索则留空字符串）",
+    "relation": "与主角的关系（主角自身填：主角本人）",
+    "note": "值得记录的细节，如特殊身份、关键行为、伏笔等（没有则留空字符串）"
+  }
+]`;
+  } else {
+    // 无正文：只根据设定字段生成，且只能以 charMain/charSub 为种子
+    const seedNames = [charMain, charSub].filter(Boolean);
+    user = `请根据以下创作设定，为这部小说生成角色卡。
+
+${hints.length ? hints.join('\n') : '（暂无设定，请根据「' + (GENRE_DESC[genre]||genre) + '」类型生成 2 个基础角色）'}
+
+【核心要求】
+1. ${seedNames.length ? '只为以下已命名的角色生成角色卡，不得额外增加角色：' + seedNames.join('、') : '仅生成主角和一名核心配角，共 2 个角色，不要更多'}
+2. 优先从设定描述中提炼信息；设定中没有直接说明但能合理推断的，写出推断结果
+3. 真正没有任何线索的字段留空字符串 ""，不要用"未设定""暂无"等文字填充
+4. 严格按以下 JSON 数组格式输出，不要任何多余文字、注释或 markdown：
+
+[
+  {
+    "name": "姓名",
+    "gender": "男/女/其他",
+    "role": "主角/男主/女主/配角/反派",
+    "job": "职业或身份背景",
+    "personality": "性格特点（1-2句）",
+    "appearance": "",
+    "relation": "与主角的关系（主角自身填：主角本人）",
+    "note": ""
+  }
+]`;
+  }
+
+  try {
+    const raw = await doBlock(sys, user);
+    // Try direct parse first, then extract JSON array with greedy regex
+    let parsed;
+    try {
+      const trimmed = raw.trim().replace(/^```json\n?|\n?```$/g, '');
+      parsed = JSON.parse(trimmed);
+    } catch (_) {
+      const jsonMatch = raw.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error('AI 返回格式异常，请重试');
+      try { parsed = JSON.parse(jsonMatch[0]); }
+      catch (_2) { throw new Error('AI 返回的 JSON 格式无法解析，请重试'); }
+    }
+    if (!Array.isArray(parsed) || !parsed.length) throw new Error('解析角色数据失败');
+    const cleanAIField = v => {
+      const s = (v || '').trim();
+      if (!s) return '';
+      if (/^(正文中|暂无|无相关|未提及|没有|不详|未知|无描写|无信息|无具体)/.test(s)) return '';
+      return s;
+    };
+    const valid = parsed
+      .filter(c => c && typeof c.name === 'string' && c.name.trim())
+      .map(c => ({
+        ...c,
+        job:         cleanAIField(c.job),
+        personality: cleanAIField(c.personality),
+        appearance:  cleanAIField(c.appearance),
+        relation:    cleanAIField(c.relation),
+        note:        cleanAIField(c.note),
+      }));
+    if (!valid.length) throw new Error('没有有效的角色数据');
+
+    const existing = proj.characters || [];
+    if (existing.length) {
+      const doAppend = confirm(`当前已有 ${existing.length} 个角色。\n\n点「确定」= 追加新角色\n点「取消」= 全部替换`);
+      proj.characters = doAppend ? [...existing, ...valid] : valid;
+    } else {
+      proj.characters = valid;
+    }
+
+    save();
+    renderChars();
+    toast(`✅ 已从${hasContent ? '正文' : '设定'}提炼 ${valid.length} 个角色卡，前往「角色」tab 查看`);
+  } catch (err) {
+    toast('❌ ' + (err.message || '生成失败，请检查 API 配置'));
+  } finally {
+    isGenningChars = false;
+    if (btn) { btn.disabled = false; btn.textContent = '✦ AI 生成角色卡'; }
+  }
+}
+
+// ═══════════════════════════════════════
+// ─── OUTLINE MODULE ───
+// ═══════════════════════════════════════
+
+let outlineDraft = []; // [{title, outline}]
+let isGeneratingOutline = false;
+
+function renderOutlineRefInfo() {
+  const el = document.getElementById('outlineRefInfo');
+  if (!el) return;
+  if (!proj.plotCore) {
+    el.textContent = '请先在「创作设定」填写故事信息';
+    el.style.color = 'var(--t3)';
+    return;
+  }
+  el.style.color = 'var(--t2)';
+  const parts = [];
+  if (proj.title) parts.push('书名：' + proj.title);
+  parts.push('类型：' + (GENRE_DESC[proj.genre] || proj.genre));
+  parts.push('风格：' + (STYLE_DESC[proj.style] || proj.style));
+  parts.push('共' + proj.chTotal + '章');
+  parts.push('每章约' + proj.chWords + '字');
+  if (proj.charMain) parts.push('主角：' + proj.charMain);
+  parts.push('\n梗概：' + proj.plotCore.slice(0, 120) + (proj.plotCore.length > 120 ? '…' : ''));
+  el.textContent = parts.join('　');
+}
+
+function renderOutlineCards() {
+  const container = document.getElementById('outlineCards');
+  if (!container) return;
+  container.innerHTML = outlineDraft.map((item, i) => `
+    <div class="ol-card">
+      <div class="ol-card-head">
+        <div class="ol-num">${i + 1}</div>
+        <input class="ol-title-input" value="${XA(item.title)}" oninput="outlineDraft[${i}].title=this.value" placeholder="章节标题">
+      </div>
+      <textarea class="ol-body-input" rows="3" oninput="outlineDraft[${i}].outline=this.value" placeholder="本章大纲…">${X(item.outline)}</textarea>
+    </div>
+  `).join('');
+}
+
+function setOutlineLoad(on) {
+  isGeneratingOutline = on;
+  const btn = document.getElementById('outlineGenBtn');
+  const spin = document.getElementById('outlineSpinner');
+  const lbl = document.getElementById('outlineGenLabel');
+  if (btn) btn.disabled = on;
+  if (spin) spin.style.display = on ? 'block' : 'none';
+  if (lbl) lbl.textContent = on ? '生 成 中…' : '✦ 一 键 生 成 全 书 大 纲';
+}
+
+async function generateOutline() {
+  if (isGeneratingOutline) { toast('⏳ 正在生成，请稍候'); return; }
+  if (!proj.plotCore) { toast('⚠️ 请先在「创作设定」填写故事梗概'); nav('setup'); return; }
+  const apiKey = cfg.apiKeys[cfg.provider];
+  if (!apiKey) { toast('⚠️ 请先配置 API Key'); nav('settings'); return; }
+
+  const extra = (document.getElementById('outlineExtraHint') || {}).value || '';
+
+  // Hide result, show stream
+  document.getElementById('outlineResultArea').style.display = 'none';
+  document.getElementById('outlineStreamArea').style.display = 'block';
+  document.getElementById('outlineStreamText').textContent = '';
+
+  setOutlineLoad(true);
+
+  const sys = `你是专业的中文网络小说策划编辑，擅长${GENRE_DESC[proj.genre]||proj.genre}类型。`;
+
+  const charInfo = buildCharBlock();
+
+  const user = `请为以下小说规划全书${proj.chTotal}章的详细大纲。
+
+【小说信息】
+书名：${proj.title || '（未定）'}
+类型：${GENRE_DESC[proj.genre]||proj.genre}
+写作风格：${STYLE_DESC[proj.style]||proj.style}
+主角：${proj.charMain||'未指定'}
+配角：${proj.charSub||'未指定'}
+世界背景：${proj.worldBg||'未指定'}
+核心剧情：${proj.plotCore}
+全书共${proj.chTotal}章，每章约${proj.chWords}字${charInfo}${extra ? '\n\n【额外创作方向】\n' + extra : ''}
+
+请严格按以下格式输出，每章一行，不要多余说明：
+
+第1章 章节标题
+本章大纲描述（2-3句，说明主要事件、人物行动、情节推进）
+
+第2章 章节标题
+本章大纲描述
+
+……以此类推，共${proj.chTotal}章。
+每章标题要有意境，大纲要具体可操作，情节要有起伏，整体结构遵循：开篇吸引→矛盾升级→高潮爆发→收尾余韵。`;
+
+  let rawText = '';
+
+  try {
+    if (cfg.streaming) {
+      await doStream(sys, user, (txt) => {
+        rawText = txt;
+        document.getElementById('outlineStreamText').textContent = txt;
+      });
+    } else {
+      rawText = await doBlock(sys, user);
+      document.getElementById('outlineStreamText').textContent = rawText;
+    }
+
+    outlineDraft = parseOutlineText(rawText, proj.chTotal);
+    document.getElementById('outlineStreamArea').style.display = 'none';
+    document.getElementById('outlineResultArea').style.display = 'block';
+    renderOutlineCards();
+    toast(`✅ 大纲生成完成，共${outlineDraft.length}章`);
+  } catch (err) {
+    document.getElementById('outlineStreamArea').style.display = 'none';
+    toast('❌ ' + (err.message || '生成失败，请检查API配置'));
+  } finally {
+    setOutlineLoad(false);
+  }
+}
+
+function regenOutline() {
+  document.getElementById('outlineResultArea').style.display = 'none';
+  outlineDraft = [];
+  generateOutline();
+}
+
+function parseOutlineText(raw, chTotal) {
+  const result = [];
+  // Match patterns like: 第N章 标题\n内容 or 第N章：标题\n内容
+  const chapterRegex = /第\s*(\d+)\s*章[\s：:·]*([^\n]+)?\n([\s\S]*?)(?=第\s*\d+\s*章|$)/g;
+  let match;
+  while ((match = chapterRegex.exec(raw)) !== null) {
+    const num = parseInt(match[1]);
+    const title = (match[2] || '').trim() || `第${num}章`;
+    const outline = (match[3] || '').trim();
+    result.push({ num, title: `第${num}章 ${title}`.replace(/^第\d+章\s*第\d+章/, `第${num}章`), outline });
+  }
+
+  // Fallback: if regex got nothing, try line-by-line
+  if (!result.length) {
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    let current = null;
+    for (const line of lines) {
+      const headerMatch = line.match(/^第\s*(\d+)\s*章[\s：:·]*(.*)/);
+      if (headerMatch) {
+        if (current) result.push(current);
+        current = { num: parseInt(headerMatch[1]), title: line, outline: '' };
+      } else if (current) {
+        current.outline += (current.outline ? '\n' : '') + line;
+      }
+    }
+    if (current) result.push(current);
+  }
+
+  // Pad or trim to exact chTotal
+  while (result.length < chTotal) {
+    const n = result.length + 1;
+    result.push({ num: n, title: `第${n}章`, outline: '' });
+  }
+  return result.slice(0, chTotal);
+}
+
+function applyOutline() {
+  if (!outlineDraft.length) { toast('⚠️ 没有可写入的大纲'); return; }
+  if (!proj.chapters || !proj.chapters.length) { toast('⚠️ 请先在「创作设定」创建项目'); nav('setup'); return; }
+
+  let applied = 0;
+  outlineDraft.forEach((item, i) => {
+    const ch = proj.chapters[i];
+    if (!ch) return;
+    // Only overwrite title if it still has the default name
+    if (item.title && item.title !== `第${ch.num}章`) {
+      ch.title = item.title;
+    }
+    if (item.outline) {
+      ch.outline = item.outline;
+      applied++;
+    }
+  });
+
+  save();
+  renderChapters();
+  toast(`✅ 已将大纲写入 ${applied} 章，可在写作台逐章查看和修改`);
+  resetOutlineDraft();
+  nav('chapters');
+}
+
 
 // ─── UTILS ───
 function X(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
