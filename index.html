@@ -348,6 +348,19 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 <!-- ═══ CHAPTERS PAGE ═══ -->
 <div class="page" id="page-chapters">
   <div id="chaptersMeta"></div>
+  <div class="card" style="padding:10px;margin-bottom:10px;">
+    <div class="frow" style="margin-bottom:8px;">
+      <input class="finput" id="chSearchInput" placeholder="搜索章节标题或内容关键词…">
+    </div>
+    <div class="frow" style="margin-bottom:0;">
+      <select class="fselect" id="chStatusFilter">
+        <option value="all" selected>全部状态</option>
+        <option value="todo">仅待创作</option>
+        <option value="writing">仅创作中</option>
+        <option value="done">仅已完成</option>
+      </select>
+    </div>
+  </div>
   <div id="chapterList"></div>
   <div style="height:10px"></div>
   <button class="btn-sm" id="addChBtn" onclick="addChapter()" style="display:none;width:100%;justify-content:center;padding:12px;">＋ 添加章节</button>
@@ -668,6 +681,7 @@ const STYLE_DESC = {
 let cfg = { provider:'deepseek', model:'deepseek-chat', apiKeys:{deepseek:'',openai:'',claude:'',custom:''}, customEndpoint:'', maxTokens:4096, temperature:1.0, streaming:true, rememberKeys:false };
 let proj = { title:'', genre:'romance', style:'literary', intensity:3, qujia:false, charMain:'', charSub:'', worldBg:'', plotCore:'', chTotal:10, chWords:1500, chapters:[] };
 let currentChIdx = -1;
+let chapterFilter={ keyword:'', status:'all' };
 let isGenerating = false;
 let isRevising   = false;
 let draftSaveTimer = null;
@@ -770,6 +784,7 @@ const INT_SHORT_DESC = [
   updateProviderBadge();
   syncSetupForm();
   loadCfgForm();
+  initChapterFilters();
   initWriteInteractions();
 })();
 
@@ -931,6 +946,25 @@ function nav(p){
   pageEl.scrollTo({top:0,behavior:'smooth'});
 }
 
+function initChapterFilters(){
+  const searchEl=document.getElementById('chSearchInput');
+  const statusEl=document.getElementById('chStatusFilter');
+  if(searchEl){
+    searchEl.value=chapterFilter.keyword;
+    addDisposableEvent(searchEl,'input',()=>{
+      chapterFilter.keyword=(searchEl.value||'').trim();
+      renderChapters();
+    });
+  }
+  if(statusEl){
+    statusEl.value=chapterFilter.status;
+    addDisposableEvent(statusEl,'change',()=>{
+      chapterFilter.status=statusEl.value||'all';
+      renderChapters();
+    });
+  }
+}
+
 function initWriteInteractions(){
   const outline=document.getElementById('chOutlineInput');
   const extra=document.getElementById('chExtra');
@@ -1077,7 +1111,21 @@ function renderChapters(){
     <span style="font-size:11px;color:var(--t3)">${done}/${proj.chapters.length}章 · ${pct}%</span>
   </div><div class="prog-wrap"><div class="prog-bar" style="width:${pct}%"></div></div>`;
 
-  list.innerHTML=proj.chapters.map((ch,i)=>`
+  const rows=proj.chapters.map((ch,i)=>({ch,i})).filter(({ch})=>{
+    const okStatus=chapterFilter.status==='all'||ch.status===chapterFilter.status;
+    if(!okStatus) return false;
+    const kw=chapterFilter.keyword.toLowerCase();
+    if(!kw) return true;
+    return ch.title.toLowerCase().includes(kw)||ch.content.toLowerCase().includes(kw)||ch.outline.toLowerCase().includes(kw);
+  });
+
+  if(!rows.length){
+    list.innerHTML='<div class="empty"><div class="empty-icon">🔎</div><div class="empty-text">没有匹配的章节<br>试试更短关键词或切换状态筛选</div></div>';
+    document.getElementById('addChBtn').style.display='block';
+    return;
+  }
+
+  list.innerHTML=rows.map(({ch,i})=>`
     <div class="ch-card ${ch.status==='done'?'done':currentChIdx===i?'current':''}">
       <div class="ch-head" onclick="selectCh(${i})">
         <div class="ch-num">${ch.num}</div>
