@@ -941,6 +941,16 @@ function estimateReadMinutes(chars){
   return Math.max(1,Math.ceil(c/450));
 }
 
+function resolveChapterTargetWords(ch){
+  if(!ch) return clampInt(proj.chWords,1500,300,8000);
+  const custom=clampInt(ch.targetWords,0,0,8000);
+  return custom>0?custom:clampInt(proj.chWords,1500,300,8000);
+}
+
+function isChapterTargetCustom(ch){
+  return clampInt(ch?.targetWords,0,0,8000)>0;
+}
+
 function createChapterId(){
   if(window.crypto?.randomUUID) return window.crypto.randomUUID();
   return `ch_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
@@ -1579,7 +1589,16 @@ function renderWrite(){
   document.getElementById('writeChTitle').textContent   = ch.title;
   document.getElementById('chOutlineInput').value       = ch.outline||'';
   document.getElementById('chExtra').value              = ch.extra||''; // ← FIX: 持久化 extra
-  document.getElementById('chTargetWords').value        = ch.targetWords||'';
+  const targetInput=document.getElementById('chTargetWords');
+  targetInput.value = ch.targetWords||'';
+  targetInput.placeholder = `默认 ${clampInt(proj.chWords,1500,300,8000)}`;
+  const targetHint=document.getElementById('writeTargetHint');
+  if(targetHint){
+    const t=resolveChapterTargetWords(ch);
+    targetHint.textContent=isChapterTargetCustom(ch)
+      ? `当前使用本章单独目标：${t} 字（留空可恢复默认）`
+      : `未设置单章目标，默认使用项目每章字数：${t} 字`;
+  }
   document.getElementById('writeOutput').value          = ch.content||'';
   updateOutWC();
   updateRevPanel();
@@ -1601,13 +1620,14 @@ function updateOutWC(){
   document.getElementById('outWC').classList.toggle('has',n>100);
   const targetChip=document.getElementById('targetWC');
   const ch=currentChIdx>=0?proj.chapters[currentChIdx]:null;
-  const target=ch?clampInt(ch.targetWords,0,0,8000):0;
+  const target=ch?resolveChapterTargetWords(ch):0;
   if(targetChip){
     if(target>0){
       const pct=Math.round(n/target*100);
       const hit=n>=target;
       targetChip.style.display='inline-flex';
-      targetChip.textContent=hit?`🎯 目标达成 ${pct}%`:`目标 ${pct}%`;
+      const tag=ch&&isChapterTargetCustom(ch)?'本章':'默认';
+      targetChip.textContent=hit?`🎯 ${tag}目标达成 ${pct}%`:`${tag}目标 ${pct}%`;
       targetChip.classList.toggle('has',hit);
     } else {
       targetChip.style.display='none';
@@ -2012,9 +2032,9 @@ function renderStats(){
   const totalR=chs.reduce((s,c)=>s+c.revCount,0);
   const avgWords=chs.length?Math.round(totalW/chs.length):0;
   const readMin=estimateReadMinutes(totalW);
-  const targeted=chs.filter(c=>c.targetWords>0&&c.content);
+  const targeted=chs.filter(c=>c.content);
   const targetHitRate=targeted.length
-    ?Math.round(targeted.filter(c=>c.content.length>=c.targetWords).length/targeted.length*100)
+    ?Math.round(targeted.filter(c=>c.content.length>=resolveChapterTargetWords(c)).length/targeted.length*100)
     :0;
   const pct=chs.length?Math.round(done.length/chs.length*100):0;
   document.getElementById('statChDone').textContent=done.length;
@@ -2472,7 +2492,8 @@ function buildChPrompt(ch){
   if(ch.outline) content+=`\n【本章剧情提示】\n${ch.outline}\n`;
   const extra=ch.extra||'';
   if(extra) content+=`\n【额外要求】\n${extra}\n`;
-  content+=`\n目标字数约${proj.chWords}字。情节完整，文笔流畅，结尾有吸引力。`;
+  const chapterTarget=resolveChapterTargetWords(ch);
+  content+=`\n目标字数约${chapterTarget}字（${isChapterTargetCustom(ch)?'本章单独设置':'默认项目设置'}）。情节完整，文笔流畅，结尾有吸引力。`;
   return content;
 }
 
