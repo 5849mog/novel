@@ -2899,7 +2899,7 @@ function applyOutline() {
     const ch = proj.chapters[i];
     if (!ch) return;
     // Only overwrite title if it still has the default name
-    if (item.title && item.title !== `第${ch.num}章`) {
+    if (item.title && ch.title === `第${ch.num}章` && item.title !== `第${ch.num}章`) {
       ch.title = item.title;
     }
     if (item.outline) {
