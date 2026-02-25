@@ -476,6 +476,14 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <input class="finput" id="chExtra" placeholder="例如：结尾留悬念，多写内心独白…">
       <div class="fhint" id="writeDraftStatus">草稿会自动保存到本地</div>
     </div>
+    <div class="frow" style="margin-top:-2px">
+      <label class="flabel">本章目标字数（可选）</label>
+      <div class="frow-2" style="gap:8px;align-items:flex-end;">
+        <input class="finput" id="chTargetWords" type="number" min="300" max="8000" step="100" placeholder="如 1800">
+        <button class="btn-sm" type="button" onclick="quickSetTargetWords()" style="height:40px;">⚡ 同步建议值</button>
+      </div>
+      <div class="fhint" id="writeTargetHint">可设置单章字数目标，用于实时显示进度</div>
+    </div>
     <button class="btn-primary" id="genBtn" onclick="generateChapter()">
       <div class="spinner" id="genSpinner"></div>
       <span id="genLabel">✦ 生 成 本 章</span>
@@ -485,6 +493,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:11px;color:var(--t3)">正文</span>
         <span class="wc-chip" id="outWC">0字</span>
+        <span class="wc-chip" id="targetWC" style="display:none">目标 0%</span>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn-deai" onclick="deAIChapter()" id="deAIBtn" style="display:none">
@@ -510,6 +519,9 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
           <button class="btn-sm" type="button" onclick="fillRevTargetFromSelection()">📌 从选中填入</button>
         </div>
         <input class="rev-input" id="revInput" placeholder="输入修改要求（如：语气更克制，保留剧情信息）…">
+        <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+          <button class="btn-sm" id="undoRevBtn" type="button" onclick="undoRevision()" style="display:none">↶ 撤销上次修改</button>
+        </div>
         <button class="rev-btn" id="revBtn" onclick="doRevision()">
           <div class="spinner" id="revSpinner"></div>
           <span id="revLabel">⟳ 提交修改</span>
@@ -526,6 +538,11 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="stat-box"><div class="stat-num" id="statChDone">0</div><div class="stat-lbl">完成章节</div></div>
     <div class="stat-box"><div class="stat-num" id="statWords">0</div><div class="stat-lbl">总字数</div></div>
     <div class="stat-box"><div class="stat-num" id="statRevs">0</div><div class="stat-lbl">修改次数</div></div>
+  </div>
+  <div class="stats-row" style="margin-top:8px;">
+    <div class="stat-box"><div class="stat-num" id="statAvgWords">0</div><div class="stat-lbl">章均字数</div></div>
+    <div class="stat-box"><div class="stat-num" id="statReadMin">0</div><div class="stat-lbl">预计阅读(分钟)</div></div>
+    <div class="stat-box"><div class="stat-num" id="statTargetHit">0%</div><div class="stat-lbl">目标达成率</div></div>
   </div>
   <div class="prog-wrap"><div class="prog-bar" id="statProg" style="width:0%"></div></div>
   <div style="font-size:11px;color:var(--t3);text-align:right;margin-top:-10px;margin-bottom:14px" id="statProgLabel">进度 0%</div>
@@ -918,6 +935,22 @@ function clampInt(v, fallback, min, max){
   return Math.min(max,Math.max(min,n));
 }
 
+function estimateReadMinutes(chars){
+  const c=Math.max(0,Number(chars)||0);
+  if(!c) return 0;
+  return Math.max(1,Math.ceil(c/450));
+}
+
+function resolveChapterTargetWords(ch){
+  if(!ch) return clampInt(proj.chWords,1500,300,8000);
+  const custom=clampInt(ch.targetWords,0,0,8000);
+  return custom>0?custom:clampInt(proj.chWords,1500,300,8000);
+}
+
+function isChapterTargetCustom(ch){
+  return clampInt(ch?.targetWords,0,0,8000)>0;
+}
+
 function createChapterId(){
   if(window.crypto?.randomUUID) return window.crypto.randomUUID();
   return `ch_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
@@ -947,6 +980,7 @@ function sanitizeProject(raw){
       title:typeof c?.title==='string'&&c.title.trim()?c.title.trim():`第${i+1}章`,
       outline:typeof c?.outline==='string'?c.outline:'',
       extra:typeof c?.extra==='string'?c.extra:'',
+      targetWords:clampInt(c?.targetWords,0,0,8000),
       content:typeof c?.content==='string'?c.content:'',
       ctxSummary:typeof c?.ctxSummary==='string'?c.ctxSummary:'',
       revisions:Array.isArray(c?.revisions)?c.revisions:[],
@@ -1214,11 +1248,19 @@ function initWriteInteractions(){
     const ch=proj.chapters[currentChIdx];
     ch.outline=(outline?.value||'').trim();
     ch.extra=(extra?.value||'').trim();
+    ch.targetWords=clampInt(document.getElementById('chTargetWords')?.value,0,0,8000);
     queueDraftSave();
   };
 
   if(outline) addDisposableEvent(outline,'input',onMetaInput);
   if(extra) addDisposableEvent(extra,'input',onMetaInput);
+  const targetInput=document.getElementById('chTargetWords');
+  if(targetInput){
+    addDisposableEvent(targetInput,'input',()=>{
+      onMetaInput();
+      updateOutWC();
+    });
+  }
 
   if(revInput){
     addDisposableEvent(revInput,'keydown',(e)=>{
@@ -1378,7 +1420,7 @@ function pickDemo(idx){
   nav('chapters');
 }
 
-function newCh(num){ return {id:createChapterId(),num,title:`第${num}章`,outline:'',content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'}; }
+function newCh(num){ return {id:createChapterId(),num,title:`第${num}章`,outline:'',extra:'',targetWords:0,content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'}; }
 
 // ─── CHAPTERS ───
 function renderChapters(){
@@ -1547,6 +1589,16 @@ function renderWrite(){
   document.getElementById('writeChTitle').textContent   = ch.title;
   document.getElementById('chOutlineInput').value       = ch.outline||'';
   document.getElementById('chExtra').value              = ch.extra||''; // ← FIX: 持久化 extra
+  const targetInput=document.getElementById('chTargetWords');
+  targetInput.value = ch.targetWords||'';
+  targetInput.placeholder = `默认 ${clampInt(proj.chWords,1500,300,8000)}`;
+  const targetHint=document.getElementById('writeTargetHint');
+  if(targetHint){
+    const t=resolveChapterTargetWords(ch);
+    targetHint.textContent=isChapterTargetCustom(ch)
+      ? `当前使用本章单独目标：${t} 字（留空可恢复默认）`
+      : `未设置单章目标，默认使用项目每章字数：${t} 字`;
+  }
   document.getElementById('writeOutput').value          = ch.content||'';
   updateOutWC();
   updateRevPanel();
@@ -1560,12 +1612,28 @@ function renderWrite(){
 }
 
 function updateOutWC(){
-  const v=document.getElementById('writeOutput').value;
+  const ta=document.getElementById('writeOutput');
+  const v=ta.value;
   const n=v.length;
   document.getElementById('outWC').textContent  = n+'字';
   document.getElementById('writeWC').textContent= n+'字';
   document.getElementById('outWC').classList.toggle('has',n>100);
-  const ta=document.getElementById('writeOutput');
+  const targetChip=document.getElementById('targetWC');
+  const ch=currentChIdx>=0?proj.chapters[currentChIdx]:null;
+  const target=ch?resolveChapterTargetWords(ch):0;
+  if(targetChip){
+    if(target>0){
+      const pct=Math.round(n/target*100);
+      const hit=n>=target;
+      targetChip.style.display='inline-flex';
+      const tag=ch&&isChapterTargetCustom(ch)?'本章':'默认';
+      targetChip.textContent=hit?`🎯 ${tag}目标达成 ${pct}%`:`${tag}目标 ${pct}%`;
+      targetChip.classList.toggle('has',hit);
+    } else {
+      targetChip.style.display='none';
+      targetChip.classList.remove('has');
+    }
+  }
   ta.scrollTop=ta.scrollHeight;
 }
 
@@ -1591,6 +1659,40 @@ function updateRevPanel(){
   document.getElementById('revExhausted').style.display=ex?'block':'none';
   document.getElementById('revForm').style.display=ex?'none':'block';
   document.getElementById('revBtn').disabled=ex;
+  const undoBtn=document.getElementById('undoRevBtn');
+  if(undoBtn) undoBtn.style.display=ch.revisions?.length?'inline-flex':'none';
+}
+
+function undoRevision(){
+  if(isBusy()){ toast('⏳ 当前有进行中的任务，请稍后再撤销'); return; }
+  if(currentChIdx<0){ toast('⚠️ 请先选择章节'); return; }
+  const ch=proj.chapters[currentChIdx];
+  if(!ch?.revisions?.length){ toast('⚠️ 当前章节没有可撤销的修改'); return; }
+  const last=ch.revisions[ch.revisions.length-1];
+  if(typeof last?.before!=='string'){
+    toast('⚠️ 该修改来自历史记录，缺少撤销快照');
+    return;
+  }
+  ch.revisions.pop();
+  ch.revCount=Math.max(0,ch.revCount-1);
+  ch.content=last.before;
+  refreshChapterSummary(ch);
+  save({immediate:true});
+  renderWrite();
+  renderChapters();
+  toast(`↶ 已撤销，当前修改次数 ${ch.revCount}/${MAX_REV}`);
+}
+
+function quickSetTargetWords(){
+  if(currentChIdx<0||!proj.chapters[currentChIdx]){ toast('⚠️ 请先选择章节'); return; }
+  const target=clampInt(proj.chWords,1500,300,8000);
+  const ch=proj.chapters[currentChIdx];
+  ch.targetWords=target;
+  const input=document.getElementById('chTargetWords');
+  if(input) input.value=target;
+  save();
+  updateOutWC();
+  toast(`🎯 已设置本章目标 ${target} 字`);
 }
 
 // Loading state setters — always safe to call even after DOM changes
@@ -1722,6 +1824,7 @@ async function generateChapter(){
 
   ch.outline = document.getElementById('chOutlineInput').value.trim();
   ch.extra   = document.getElementById('chExtra').value.trim();
+  ch.targetWords = clampInt(document.getElementById('chTargetWords').value,0,0,8000);
   save();
 
   const prevContent = ch.content;
@@ -1927,10 +2030,19 @@ function renderStats(){
   const done=chs.filter(c=>c.status==='done');
   const totalW=chs.reduce((s,c)=>s+(c.content?c.content.length:0),0);
   const totalR=chs.reduce((s,c)=>s+c.revCount,0);
+  const avgWords=chs.length?Math.round(totalW/chs.length):0;
+  const readMin=estimateReadMinutes(totalW);
+  const targeted=chs.filter(c=>c.content);
+  const targetHitRate=targeted.length
+    ?Math.round(targeted.filter(c=>c.content.length>=resolveChapterTargetWords(c)).length/targeted.length*100)
+    :0;
   const pct=chs.length?Math.round(done.length/chs.length*100):0;
   document.getElementById('statChDone').textContent=done.length;
   document.getElementById('statWords').textContent=totalW>999?(totalW/1000).toFixed(1)+'k':totalW;
   document.getElementById('statRevs').textContent=totalR;
+  document.getElementById('statAvgWords').textContent=avgWords;
+  document.getElementById('statReadMin').textContent=readMin;
+  document.getElementById('statTargetHit').textContent=targeted.length?`${targetHitRate}%`:'—';
   document.getElementById('statProg').style.width=pct+'%';
   document.getElementById('statProgLabel').textContent=`完成进度 ${pct}%（${done.length}/${chs.length}章）`;
   const with_content=chs.filter(c=>c.content);
@@ -1972,6 +2084,7 @@ function buildExportText(format='txt'){
     lines.push(`- 配角：${proj.charSub||'未设定'}`);
     lines.push(`- 章节数：${has.length}`);
     lines.push(`- 总字数：${has.reduce((s,c)=>s+c.content.length,0)}`);
+    lines.push(`- 预计阅读时长：${estimateReadMinutes(has.reduce((s,c)=>s+c.content.length,0))} 分钟`);
     lines.push('');
     lines.push('---');
     lines.push('');
@@ -1990,6 +2103,7 @@ function buildExportText(format='txt'){
   lines.push(`类型：${proj.genre}　风格：${proj.style}　情感强度：第${proj.intensity}档·${INT_LABELS[proj.intensity-1]}`);
   lines.push(`主角：${proj.charMain||'未设定'}　配角：${proj.charSub||'未设定'}`);
   has.length&&lines.push(`共${has.length}章 · ${has.reduce((s,c)=>s+c.content.length,0)}字`);
+  has.length&&lines.push(`预计阅读：${estimateReadMinutes(has.reduce((s,c)=>s+c.content.length,0))}分钟`);
   lines.push(''); lines.push('═'.repeat(40)); lines.push('');
   has.forEach(ch=>{ lines.push(ch.title); lines.push('─'.repeat(20)); lines.push(ch.content); lines.push(''); lines.push(''); });
   return lines.join('\n');
@@ -2378,7 +2492,8 @@ function buildChPrompt(ch){
   if(ch.outline) content+=`\n【本章剧情提示】\n${ch.outline}\n`;
   const extra=ch.extra||'';
   if(extra) content+=`\n【额外要求】\n${extra}\n`;
-  content+=`\n目标字数约${proj.chWords}字。情节完整，文笔流畅，结尾有吸引力。`;
+  const chapterTarget=resolveChapterTargetWords(ch);
+  content+=`\n目标字数约${chapterTarget}字（${isChapterTargetCustom(ch)?'本章单独设置':'默认项目设置'}）。情节完整，文笔流畅，结尾有吸引力。`;
   return content;
 }
 
