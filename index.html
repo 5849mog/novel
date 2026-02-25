@@ -265,6 +265,57 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .ol-body-input{ width:100%;background:var(--s3);border:1px solid var(--b1);border-radius:8px;padding:9px 11px;color:var(--t2);font-size:13px;font-family:'Noto Sans SC',sans-serif;outline:none;resize:none;line-height:1.7; }
 .ol-body-input:focus{ border-color:var(--b2); }
 
+/* ─── 演示项目选择弹窗 ─── */
+.demo-modal-wrap{position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.75);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  display:flex;align-items:flex-end;justify-content:center;}
+.demo-modal{background:var(--s1);border-top:1px solid var(--b1);border-radius:20px 20px 0 0;
+  width:100%;max-width:540px;max-height:80svh;display:flex;flex-direction:column;
+  padding:0 0 env(safe-area-inset-bottom,0);}
+.demo-modal-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:18px 18px 12px;border-bottom:1px solid var(--b1);flex-shrink:0;}
+.demo-modal-title{font-family:'Noto Serif SC',serif;font-size:16px;font-weight:700;color:var(--gold);}
+.demo-modal-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 20px;flex:1;}
+.demo-genre-label{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;
+  color:var(--t3);margin:14px 0 8px;display:flex;align-items:center;gap:8px;}
+.demo-genre-label::after{content:'';flex:1;height:1px;background:var(--b1);}
+.demo-genre-label:first-child{margin-top:0;}
+.demo-item{display:flex;align-items:center;justify-content:space-between;
+  padding:11px 13px;background:var(--s2);border:1px solid var(--b1);border-radius:10px;
+  margin-bottom:8px;cursor:pointer;transition:border-color .18s,background .18s;gap:10px;}
+.demo-item:active,.demo-item:hover{border-color:var(--b2);background:var(--s3);}
+.demo-item-left{flex:1;min-width:0;}
+.demo-item-title{font-size:14px;font-weight:600;color:var(--t1);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;}
+.demo-item-meta{font-size:11px;color:var(--t3);margin-top:3px;line-height:1.5;}
+.demo-item-tags{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;}
+.demo-tag{font-size:10px;padding:1px 6px;border-radius:6px;background:var(--s4);
+  color:var(--t3);font-weight:500;white-space:nowrap;}
+.demo-tag.genre-romance{background:rgba(196,40,64,.12);color:#ff7090;}
+.demo-tag.genre-historical{background:rgba(200,164,74,.12);color:var(--gold2);}
+.demo-tag.genre-suspense{background:rgba(91,63,160,.18);color:var(--purple2);}
+.demo-tag.genre-scifi{background:rgba(30,130,200,.15);color:#6ab8e8;}
+.demo-tag.genre-fantasy,.demo-tag.genre-xianxia{background:rgba(45,160,120,.15);color:var(--jade2);}
+.demo-tag.genre-horror{background:rgba(100,30,30,.35);color:#e08080;}
+.demo-tag.genre-urban{background:rgba(120,120,160,.15);color:#a0a0cc;}
+.demo-tag.intensity-high{background:rgba(196,40,64,.15);color:#ff7090;}
+.demo-item-arrow{color:var(--t4);flex-shrink:0;}
+
+/* ─── 去AI化按钮 ─── */
+.btn-deai{
+  padding:8px 14px;border-radius:8px;border:1px solid rgba(45,180,140,.5);
+  background:linear-gradient(135deg,rgba(26,110,85,.6),rgba(20,80,65,.4));
+  color:#4ecba8;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  transition:all .22s;font-family:'Noto Sans SC',sans-serif;white-space:nowrap;
+  letter-spacing:.5px;font-weight:600;
+}
+.btn-deai:hover{border-color:#4ecba8;color:#7edfc3;background:linear-gradient(135deg,rgba(30,130,100,.7),rgba(20,90,70,.5));}
+.btn-deai:active{transform:scale(.95);}
+.btn-deai:disabled{opacity:.3;cursor:not-allowed;}
+/* 去AI化运行中脉冲效果 */
+@keyframes deai-pulse{0%,100%{box-shadow:0 0 0 0 rgba(78,203,168,.4)}50%{box-shadow:0 0 0 5px rgba(78,203,168,0)}}
+.btn-deai.running{animation:deai-pulse 1.4s infinite;border-color:#4ecba8;}
+
 </style>
 </head>
 <body>
@@ -435,7 +486,11 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
         <span style="font-size:11px;color:var(--t3)">正文</span>
         <span class="wc-chip" id="outWC">0字</span>
       </div>
-      <div style="display:flex;gap:6px;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn-deai" onclick="deAIChapter()" id="deAIBtn" style="display:none">
+          <div class="spinner" id="deAISpinner" style="border-color:rgba(78,203,168,.35);border-top-color:#4ecba8;"></div>
+          <span id="deAILabel">✦ 去AI化</span>
+        </button>
         <button class="btn-sm ok" onclick="copyChapter()" id="copyChBtn" style="display:none">📋 复制</button>
         <button class="btn-sm" onclick="saveChapter()" id="saveChBtn" style="display:none">💾 确认本章</button>
       </div>
@@ -499,6 +554,17 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   <div id="charList"></div>
   <div id="charEmpty" style="display:none">
     <div class="empty"><div class="empty-icon">🎭</div><div class="empty-text">还没有角色卡<br>点击右上角「＋ 新建角色」开始</div></div>
+  </div>
+</div>
+
+<!-- DEMO PICKER MODAL -->
+<div id="demoModal" style="display:none" class="demo-modal-wrap" onclick="if(event.target===this)closeDemoModal()">
+  <div class="demo-modal" onclick="event.stopPropagation()">
+    <div class="demo-modal-hdr">
+      <span class="demo-modal-title">📖 选择演示项目</span>
+      <button class="btn-sm" onclick="closeDemoModal()">✕ 关闭</button>
+    </div>
+    <div class="demo-modal-body" id="demoList"></div>
   </div>
 </div>
 
@@ -702,6 +768,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="demos.js"></script>
 <script>
 'use strict';
 // ─── CONSTANTS ───
@@ -998,7 +1065,14 @@ function persistState(){
     const cfgSnapshot={...cfg};
     delete cfgSnapshot.apiKeys;
     localStorage.setItem(CFG_KEY,JSON.stringify(cfgSnapshot));
-    localStorage.setItem(PROJ_KEY, JSON.stringify(proj));
+
+    // 存储时剥离 revisions 中的全文快照（before/after），只保留 round/mode/inst
+    // 这些快照只在内存中用于撤销，不需要持久化，避免 JSON 体积随章节数爆炸
+    const projLean={...proj, chapters: proj.chapters.map(ch=>({
+      ...ch,
+      revisions: (ch.revisions||[]).map(r=>({round:r.round, mode:r.mode, inst:r.inst}))
+    }))};
+    localStorage.setItem(PROJ_KEY, JSON.stringify(projLean));
     persistApiKeys();
   } catch(e){ toast('⚠️ 存储失败（可能是无痕模式限制）'); }
 }
@@ -1055,7 +1129,7 @@ function getChapterById(id){
 }
 
 function isBusy(){
-  return isGenerating||isRevising||(typeof isGeneratingOutline!=="undefined"&&isGeneratingOutline)||(typeof isGenningChars!=="undefined"&&isGenningChars);
+  return isGenerating||isRevising||isDeAIing||(typeof isGeneratingOutline!=="undefined"&&isGeneratingOutline)||(typeof isGenningChars!=="undefined"&&isGenningChars);
 }
 
 function updateOpStatus(){
@@ -1081,6 +1155,8 @@ function syncWriteLocks(){
   if(saveBtn) saveBtn.disabled=busy;
   const copyBtn=document.getElementById('copyChBtn');
   if(copyBtn) copyBtn.disabled=busy;
+  const deaiBtn=document.getElementById('deAIBtn');
+  if(deaiBtn) deaiBtn.disabled=busy;
 }
 
 // ─── NAV ───
@@ -1097,13 +1173,16 @@ function nav(p){
   pageEl.classList.add('entering');
   const nb=document.getElementById('bnav-'+p);
   if(nb) nb.classList.add('active');
-  if(p==='chapters') renderChapters();
-  if(p==='write')    renderWrite();
-  if(p==='stats')    renderStats();
-  if(p==='settings') loadCfgForm();
-  if(p==='chars')    { renderChars(); }
-  if(p==='outline')  { renderOutlineRefInfo(); }
-  pageEl.scrollTo({top:0,behavior:'smooth'});
+  // 用 rAF 延迟重渲染，让切换动画先流畅跑起来，再执行数据渲染
+  requestAnimationFrame(()=>{
+    if(p==='chapters') renderChapters();
+    if(p==='write')    renderWrite();
+    if(p==='stats')    renderStats();
+    if(p==='settings') loadCfgForm();
+    if(p==='chars')    { renderChars(); }
+    if(p==='outline')  { renderOutlineRefInfo(); }
+    pageEl.scrollTo({top:0,behavior:'smooth'});
+  });
 }
 
 function initChapterFilters(){
@@ -1240,114 +1319,63 @@ function initProject(){
   save(); toast('✅ 项目创建成功！前往【章节】开始创作'); nav('chapters');
 }
 
-const DEMO_PROJECTS=[
-  {
-    title:'霸总的温柔陷阱', genre:'romance', style:'sensual', intensity:4, qujia:false,
-    charMain:'林晚晚，25岁，清冷美人，设计师，渴望被爱却不善表达',
-    charSub:'沈慕白，32岁，商业帝国总裁，霸道外表下深藏柔情',
-    worldBg:'现代都市，上海，商业与时尚圈',
-    plotCore:'林晚晚因家族欠债被迫嫁给沈慕白，从冷战对峙到逐渐心动，中间横亘着商业阴谋与旧情人的阻挠，最终两人在风雨中走向真爱',
-    chTotal:10, chWords:1500
-  },
-  {
-    title:'赛博夜色交易', genre:'scifi', style:'dark', intensity:5, qujia:true,
-    charMain:'岑烬，黑客佣兵，外冷内烈，擅长神经入侵与情报置换',
-    charSub:'艾汐，企业继承人，白天高贵克制，夜里沉迷危险游戏',
-    worldBg:'近未来海港城，霓虹与暴雨覆盖，巨型财阀统治地下网络',
-    plotCore:'岑烬受雇窃取财阀核心芯片，却发现雇主正是艾汐。两人在互相利用中产生致命吸引，最终联手掀翻财阀，代价是暴露彼此最脆弱的秘密',
-    chTotal:12, chWords:1500
-  },
-  {
-    title:'禁宫烛影', genre:'historical', style:'sensual', intensity:5, qujia:true,
-    charMain:'沈清绾，罪臣之女，被迫入宫为女史，聪敏隐忍',
-    charSub:'萧承璟，摄政王，冷酷狠绝，却对她步步失控',
-    worldBg:'架空王朝，风雨飘摇的宫廷，权谋与礼教交织',
-    plotCore:'沈清绾为查父案真相接近摄政王，二人在试探与博弈中越陷越深。朝堂倾轧、后宫暗杀接连爆发，他们必须在权力与欲望之间选出唯一生路',
-    chTotal:15, chWords:1500
-  },
-  {
-    title:'雪夜孤岛密室', genre:'suspense', style:'dark', intensity:4, qujia:false,
-    charMain:'周棠，犯罪心理学讲师，擅长读心却不敢直面自己的创伤',
-    charSub:'陆沉舟，私人安保顾问，寡言冷峻，过去疑点重重',
-    worldBg:'暴风雪封锁的海上疗养岛，一栋旧庄园与七名陌生来客',
-    plotCore:'一场高价心理实验变成连环命案。周棠与陆沉舟被迫共处密室，在互相怀疑与彼此依赖之间寻找真凶。每破解一层谜题，他们之间的边界就更危险一分',
-    chTotal:10, chWords:1500
-  },
-  {
-    title:'猎魔圣约', genre:'fantasy', style:'sensual', intensity:4, qujia:true,
-    charMain:'伊芙琳，流亡圣女，掌握禁忌治愈术，温柔却倔强',
-    charSub:'阿瑞斯，堕翼魔将，嗜战残暴，却独独守着她',
-    worldBg:'双月大陆，神殿与魔域百年战争未休，古老契约即将失效',
-    plotCore:'伊芙琳为阻止战争签下血契，与阿瑞斯绑定生命。两人一路穿越战场与遗迹，在敌我阵营追杀中逐渐失守。最终他们要决定：拯救世界，还是成全彼此',
-    chTotal:12, chWords:1500
-  },
-  {
-    title:'无尽列车13号', genre:'horror', style:'dark', intensity:5, qujia:true,
-    charMain:'程晚，都市怪谈主播，胆大嘴硬，真实身份是驱邪家族末裔',
-    charSub:'谢临，失踪多年的前搭档，似人非人，记忆残缺',
-    worldBg:'午夜才会出现的13号列车，车厢连接不同噩梦场景',
-    plotCore:'程晚追查粉丝失踪案，意外登上13号列车并重逢谢临。每站都要以记忆与代价换生路，二人在惊悚试炼中揭开当年真相，也被迫面对扭曲却无法割舍的羁绊',
-    chTotal:10, chWords:1500
-  },
-  {
-    title:'深海实验室心跳协议', genre:'scifi', style:'sensual', intensity:5, qujia:true,
-    charMain:'唐砚，深海工程师，理性克制，患有轻度失温后遗症',
-    charSub:'闻星河，生物改造体指挥官，危险而优雅，情绪读写能力异常',
-    worldBg:'太平洋海沟下12000米移动实验站，氧气配给与权限等级决定生死',
-    plotCore:'实验站遭遇未知生物入侵，唐砚必须与闻星河绑定神经同步协议才能操控防御系统。每次同步都让他们更接近彼此内心最私密的欲望，也让失控风险逐步升级',
-    chTotal:12, chWords:1500
-  },
-  {
-    title:'红毯杀机', genre:'suspense', style:'sensual', intensity:4, qujia:false,
-    charMain:'许念，顶流女演员，外表明艳，内心警觉，擅长伪装情绪',
-    charSub:'顾承泽，娱乐法务王牌律师，冷静狠准，只对她破例',
-    worldBg:'当代娱乐圈，颁奖季与资本博弈并行，舆论像刀一样锋利',
-    plotCore:'许念在巅峰夜收到死亡预告，唯一线索指向她十年前的秘密。顾承泽受托保护她，却在调查中发现自己也被卷入局中。两人边查真相边对抗舆论风暴，关系在高压与危险中急速升温',
-    chTotal:10, chWords:1500
-  },
-  {
-    title:'龙城夜宴', genre:'fantasy', style:'dark', intensity:5, qujia:true,
-    charMain:'白翎，半龙血盗贼，狡黠大胆，能听见龙骨低语',
-    charSub:'祁曜，龙城执法官，禁欲冷硬，体内封印着暴走龙魂',
-    worldBg:'蒸汽与魔法共存的龙城，贵族夜宴下隐藏黑市献祭',
-    plotCore:'白翎潜入夜宴偷取龙骨钥匙，被祁曜当场擒获。为了阻止龙魂暴走，两人不得不签下共感契约，白天互相追捕，夜里共同潜入禁区。真相揭开时，他们必须决定谁来承担龙魂反噬',
-    chTotal:14, chWords:1500
-  },
-  {
-    title:'审判庭之吻', genre:'historical', style:'dark', intensity:4, qujia:true,
-    charMain:'苏鸢，女讼师，言辞锋利，专攻冤案与禁忌案件',
-    charSub:'顾延，锦衣卫都指挥使，铁血无情，却暗中庇护她多年',
-    worldBg:'架空明制王朝，审判庭与诏狱并存，真相常被权势改写',
-    plotCore:'苏鸢接手一宗谋逆案，证据全指向恩师。顾延奉命监审，表面与她对立，实则步步放水。两人在法理与私情间不断拉扯，最终联手撕开朝堂最深层的交易网络',
-    chTotal:12, chWords:1500
-  },
-  {
-    title:'午夜医院B13', genre:'horror', style:'dark', intensity:5, qujia:true,
-    charMain:'姜眠，急诊科医生，冷静果决，能看见濒死者的残影',
-    charSub:'陆执，法医，毒舌克制，身体却在逐渐失去体温',
-    worldBg:'老城区百年医院，废弃B13病区在午夜后会重新亮灯',
-    plotCore:'接连发生“死者回诊”事件，姜眠与陆执追查到B13病区。每进入一次，现实时间就被偷走一小时。两人在恐怖真相逼近中相互拯救，也逐步发现陆执可能本就不属于活人世界',
-    chTotal:10, chWords:1500
-  },
-  {
-    title:'荒漠直播求生局', genre:'urban', style:'sensual', intensity:4, qujia:false,
-    charMain:'阮乔，户外博主，乐观狠劲并存，镜头感极强',
-    charSub:'盛野，前特战队员，寡言沉稳，受雇保护节目组',
-    worldBg:'国际真人秀在无人荒漠直播，观众打赏可实时触发任务',
-    plotCore:'节目从竞技变成猎杀，赞助方暗中下注嘉宾生死。阮乔与盛野在极限环境中结盟，既要活下去又要反制幕后黑手。直播镜头外，他们的关系也在生死交界处迅速发酵',
-    chTotal:11, chWords:1500
-  }
-];
+
+const GENRE_NAMES={romance:'言情',historical:'古言历史',suspense:'悬疑推理',scifi:'科幻',fantasy:'奇幻',xianxia:'玄幻修仙',horror:'恐怖灵异',urban:'都市现代'};
+const GENRE_ORDER=['romance','historical','suspense','scifi','fantasy','xianxia','horror','urban'];
 
 function loadDemo(){
-  const menu=DEMO_PROJECTS.map((d,i)=>`${i+1}. ${d.title}`).join('\n');
-  const pick=window.prompt(`请输入演示项目编号（1-${DEMO_PROJECTS.length}）：\n${menu}`, '1');
-  if(pick===null) return;
-  const idx=Number.parseInt(pick,10)-1;
-  if(Number.isNaN(idx)||idx<0||idx>=DEMO_PROJECTS.length){ toast('⚠️ 编号无效，已取消加载'); return; }
+  if(typeof DEMO_PROJECTS==='undefined'||!DEMO_PROJECTS?.length){
+    toast('⚠️ 演示项目库未加载，请检查 demos.js 是否存在'); return;
+  }
+  renderDemoModal();
+  document.getElementById('demoModal').style.display='flex';
+  document.body.style.overflow='hidden';
+}
+
+function closeDemoModal(){
+  document.getElementById('demoModal').style.display='none';
+  document.body.style.overflow='';
+}
+
+function renderDemoModal(){
+  const grouped={};
+  DEMO_PROJECTS.forEach((d,i)=>{
+    const g=d.genre||'urban';
+    if(!grouped[g]) grouped[g]=[];
+    grouped[g].push({d,i});
+  });
+  const html=GENRE_ORDER.filter(g=>grouped[g]).map(g=>{
+    const items=grouped[g].map(({d,i})=>{
+      const tags=[];
+      tags.push(`<span class="demo-tag genre-${d.genre}">${GENRE_NAMES[d.genre]||d.genre}</span>`);
+      if(d.intensity>=4) tags.push(`<span class="demo-tag intensity-high">强度${d.intensity}</span>`);
+      if(d.qujia) tags.push(`<span class="demo-tag">🔓去甲</span>`);
+      tags.push(`<span class="demo-tag">${d.chTotal}章·${d.chWords}字/章</span>`);
+      const shortPlot=d.plotCore.length>55?d.plotCore.slice(0,55)+'…':d.plotCore;
+      return `<div class="demo-item" onclick="pickDemo(${i})">
+        <div class="demo-item-left">
+          <div class="demo-item-title">${X(d.title)}</div>
+          <div class="demo-item-meta">${X(shortPlot)}</div>
+          <div class="demo-item-tags">${tags.join('')}</div>
+        </div>
+        <svg class="demo-item-arrow" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </div>`;
+    }).join('');
+    return `<div class="demo-genre-label">${GENRE_NAMES[g]||g}</div>${items}`;
+  }).join('');
+  document.getElementById('demoList').innerHTML=html;
+}
+
+function pickDemo(idx){
   const demo=DEMO_PROJECTS[idx];
+  if(!demo){ toast('⚠️ 找不到该演示项目'); return; }
+  if(isBusy()){ toast('⏳ 当前有任务进行中，暂不可切换项目'); return; }
+  closeDemoModal();
   proj={...demo, chapters:Array.from({length:demo.chTotal},(_,i)=>newCh(i+1)), characters:[]};
-  save(); syncSetupForm(); renderChars(); toast(`📖 已加载演示：${demo.title}`); nav('chapters');
+  currentChIdx=-1;
+  save(); syncSetupForm(); renderChars();
+  toast(`📖 已加载演示：${demo.title}`);
+  nav('chapters');
 }
 
 function newCh(num){ return {id:createChapterId(),num,title:`第${num}章`,outline:'',content:'',ctxSummary:'',revisions:[],revCount:0,status:'todo'}; }
@@ -1374,7 +1402,9 @@ function renderChapters(){
     if(!okStatus) return false;
     const kw=chapterFilter.keyword.toLowerCase();
     if(!kw) return true;
-    return ch.title.toLowerCase().includes(kw)||ch.content.toLowerCase().includes(kw)||ch.outline.toLowerCase().includes(kw);
+    // 搜索标题、大纲摘要、ctxSummary，不扫全文内容（性能优化）
+    const searchTarget=(ch.title+' '+(ch.outline||'')+ ' '+(ch.ctxSummary||'')).toLowerCase();
+    return searchTarget.includes(kw);
   });
 
   if(!rows.length){
@@ -1383,7 +1413,10 @@ function renderChapters(){
     return;
   }
 
-  list.innerHTML=rows.map(({ch,i})=>`
+  // 用 DocumentFragment 批量插入，只触发一次 reflow
+  const frag=document.createDocumentFragment();
+  const tmp=document.createElement('div');
+  tmp.innerHTML=rows.map(({ch,i})=>`
     <div class="ch-card ${ch.status==='done'?'done':currentChIdx===i?'current':''}">
       <div class="ch-head" onclick="selectCh(${i})">
         <div class="ch-num">${ch.num}</div>
@@ -1405,6 +1438,9 @@ function renderChapters(){
         <button class="btn-sm danger" onclick="deleteCh(${i},event)">🗑️ 删除</button>
       </div>
     </div>`).join('');
+  while(tmp.firstChild) frag.appendChild(tmp.firstChild);
+  list.innerHTML='';
+  list.appendChild(frag);
   document.getElementById('addChBtn').style.display='block';
 }
 
@@ -1517,6 +1553,7 @@ function renderWrite(){
   const has=!!ch.content;
   document.getElementById('copyChBtn').style.display = has?'inline-flex':'none';
   document.getElementById('saveChBtn').style.display = (has&&ch.status!=='done')?'inline-flex':'none';
+  document.getElementById('deAIBtn').style.display   = has?'inline-flex':'none';
   setDraftStatus('草稿会自动保存到本地');
   updateOpStatus();
   syncWriteLocks();
@@ -1576,6 +1613,96 @@ function setRevLoad(on){
   const lbl=document.getElementById('revLabel'); if(lbl) lbl.textContent=on?'修改中…':'⟳ 提交修改';
   updateOpStatus();
   syncWriteLocks();
+}
+
+// ─── 去AI化 ───
+let isDeAIing=false;
+
+function setDeAILoad(on){
+  isDeAIing=on;
+  const btn=document.getElementById('deAIBtn');
+  if(btn){ btn.disabled=on; btn.classList.toggle('running',on); }
+  const spin=document.getElementById('deAISpinner'); if(spin) spin.style.display=on?'block':'none';
+  const lbl=document.getElementById('deAILabel'); if(lbl) lbl.textContent=on?'润色中…':'✦ 去AI化';
+  syncWriteLocks();
+}
+
+async function deAIChapter(){
+  if(isBusy()){ toast('⏳ 当前有任务进行中，请稍后'); return; }
+  if(currentChIdx<0){ toast('⚠️ 请先选择章节'); return; }
+  const ch=proj.chapters[currentChIdx];
+  if(!ch||!ch.content){ toast('⚠️ 当前章节没有可润色的内容'); return; }
+  const apiKey=cfg.apiKeys[cfg.provider];
+  if(!apiKey){ toast('⚠️ 请先配置 API Key'); nav('settings'); return; }
+
+  const prev=ch.content;
+  const outEl=document.getElementById('writeOutput');
+
+  setDeAILoad(true);
+  if(cfg.streaming) outEl.value='';
+
+  const sys=`你是一位资深文学编辑，专注于将"AI生成腔"的中文小说文本润色为具有真实人类写作质感的文学作品。你的核心能力是识别并抹除工业化写作痕迹，赋予文字拙朴感与生命力。润色时绝对不改变任何情节、人物、场景，只在语言和节奏层面操作。`;
+
+  const user=`【去AI化深度润色任务】
+
+请将以下章节正文进行深度去AI化润色。严格遵守全部规则，直接输出改写后的完整正文，不加任何说明或注释。
+
+【词汇黑名单——严禁出现以下词汇及任何变体】
+动作类：呼吸一滞、瞳孔骤然收缩、嘴角勾起一抹弧度、眼神暗了暗、倒吸一口凉气、浑身一僵
+描写类：冷冽的气息、深邃得像潭死水、像是要把她吸进去、沙哑得厉害、不容拒绝、玩味
+
+【描写替换规则】
+1. 以物衬情——删除"她很绝望""他愤怒极了"等直接情绪词，改为描写具体物象：指甲缝里的干涸血迹、风吹过空荡走廊的尖啸、案几上那半盏已经结了浮油的冷茶
+2. 触觉升级——描写温差、材质、重力的细微变化：湿衣服贴在脊梁上的沉重感，指尖划过粗糙宫墙时的钝痛
+
+【节奏重塑规则】
+3. 短促断句——高压场景增加短句，模拟思维的混乱与断裂感
+4. 留白处理——删掉AI式的"事事有回应"。让角色在被提问时看向窗外的落叶，或突然想起一件与当下完全无关的往事
+
+【对白去脂规则】
+5. 删掉所有"解释性"对白，人类说话往往含糊、词不达意或充满隐喻
+6. 用沉默和审视代替直白的威胁，强化角色身份带来的压迫感
+
+【动作重构规则】
+7. 加入下意识的小动作：反复抚平衣角的褶皱、避开视线的瞬间、因寒冷产生的生理性战栗（而非心理性僵硬）
+
+【核心原则】
+- 禁止生理反应堆砌，禁止网文套路词
+- 引入环境隐喻，打破逻辑闭环，增加人物行为的不可预测性
+- 文字侧重描写：事物的残缺、温度的流失、空间的压迫，以此折射人物内心博弈
+- 保留原文所有情节节点、人物名称、场景顺序
+- 字数可浮动±15%，不得引入任何新情节
+
+【待润色正文】
+${prev}`;
+
+  try{
+    let result='';
+    if(cfg.streaming){
+      await doStream(sys,user,(txt)=>{
+        result=txt;
+        outEl.value=txt;
+        updateOutWC();
+      });
+    } else {
+      result=await doBlock(sys,user);
+      outEl.value=result;
+      updateOutWC();
+    }
+    if(!result) throw new Error('AI返回了空内容，请重试');
+    ch.content=result;
+    refreshChapterSummary(ch);
+    save();
+    renderChapters();
+    toast(`✨ 去AI化完成！共${result.length}字`);
+  } catch(err){
+    outEl.value=prev;
+    ch.content=prev;
+    updateOutWC();
+    toast('❌ '+(err.message||'润色失败，请检查API配置'));
+  } finally {
+    setDeAILoad(false);
+  }
 }
 
 // ─── GENERATE ───
@@ -1644,6 +1771,7 @@ async function generateChapter(){
       updateRevPanel();
       document.getElementById('copyChBtn').style.display='inline-flex';
       document.getElementById('saveChBtn').style.display='inline-flex';
+      document.getElementById('deAIBtn').style.display='inline-flex';
     }
     renderChapters();
     toast(`✅ 第${doneCh.num}章已生成！共${result.length}字`);
@@ -1814,7 +1942,7 @@ function renderStats(){
         <span style="font-weight:600;color:${ch.status==='done'?'var(--jade2)':'var(--gold)'}">${X(ch.title)}</span>
         <span style="font-size:11px;color:var(--t3)">${ch.content.length}字${ch.revCount>0?' · 改'+ch.revCount+'次':''}</span>
       </div>
-      <div style="font-size:13px;color:var(--t2);line-height:1.7;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${X(ch.content)}</div>
+      <div style="font-size:13px;color:var(--t2);line-height:1.7;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${X(ch.content.slice(0,200))}</div>
       <div style="margin-top:8px;display:flex;gap:6px;">
         <button class="btn-sm ok" onclick="copyChById(${ch.id})">📋 复制本章</button>
         ${ch.status!=='done'?`<button class="btn-sm" onclick="goWriteCh(${ch.id})">✍️ 继续写</button>`:''}
@@ -2899,7 +3027,7 @@ function applyOutline() {
     const ch = proj.chapters[i];
     if (!ch) return;
     // Only overwrite title if it still has the default name
-    if (item.title && ch.title === `第${ch.num}章` && item.title !== `第${ch.num}章`) {
+    if (item.title && item.title !== `第${ch.num}章`) {
       ch.title = item.title;
     }
     if (item.outline) {
