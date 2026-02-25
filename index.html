@@ -1365,8 +1365,15 @@ function initProject(){
 const GENRE_NAMES={romance:'言情',historical:'古言历史',suspense:'悬疑推理',scifi:'科幻',fantasy:'奇幻',xianxia:'玄幻修仙',horror:'恐怖灵异',urban:'都市现代'};
 const GENRE_ORDER=['romance','historical','suspense','scifi','fantasy','xianxia','horror','urban'];
 
+function getDemoProjects(){
+  if(typeof globalThis!=='undefined'&&Array.isArray(globalThis.DEMO_PROJECTS)) return globalThis.DEMO_PROJECTS;
+  if(typeof DEMO_PROJECTS!=='undefined'&&Array.isArray(DEMO_PROJECTS)) return DEMO_PROJECTS;
+  return [];
+}
+
 function loadDemo(){
-  if(typeof DEMO_PROJECTS==='undefined'||!DEMO_PROJECTS?.length){
+  const demos=getDemoProjects();
+  if(!demos.length){
     toast('⚠️ 演示项目库未加载，请检查 demos.js 是否存在'); return;
   }
   renderDemoModal();
@@ -1380,8 +1387,9 @@ function closeDemoModal(){
 }
 
 function renderDemoModal(){
+  const demos=getDemoProjects();
   const grouped={};
-  DEMO_PROJECTS.forEach((d,i)=>{
+  demos.forEach((d,i)=>{
     const g=d.genre||'urban';
     if(!grouped[g]) grouped[g]=[];
     grouped[g].push({d,i});
@@ -1409,7 +1417,7 @@ function renderDemoModal(){
 }
 
 function pickDemo(idx){
-  const demo=DEMO_PROJECTS[idx];
+  const demo=getDemoProjects()[idx];
   if(!demo){ toast('⚠️ 找不到该演示项目'); return; }
   if(isBusy()){ toast('⏳ 当前有任务进行中，暂不可切换项目'); return; }
   closeDemoModal();

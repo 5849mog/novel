@@ -474,3 +474,8 @@ chTotal: 12, chWords: 1500
   },
 
 ];
+
+// 兼容不同运行环境（浏览器 / WebView）对全局变量解析差异
+if (typeof globalThis !== 'undefined') {
+  globalThis.DEMO_PROJECTS = DEMO_PROJECTS;
+}
